@@ -19,6 +19,9 @@
 // try compiling pulseaudio 1.1 and modify with syscall assembly
 // investigate dynamically loading the linux .so
 // handle the network being blocked or pulseaudio daemon disappearing - at the moment the track starts progressing at max speed
+// check return value of every function and if it's an error code, convert to string and log
+// note: in wine it seems pause and stop are fast, seeking and changing track is slow
+// channel layout for 5.1 is wrong
 
 namespace {
 	typedef HRESULT(CALLBACK* LPFNDLLFUNC1)(DWORD, UINT*);
@@ -189,7 +192,7 @@ namespace {
 
 			g_pa_context_set_state_callback(context, context_state_cb, mainloop);
 
-			if (g_pa_context_connect(context, "127.0.0.1", (pa_context_flags_t)0, NULL) < 0
+			if (g_pa_context_connect(context, NULL, (pa_context_flags_t)0, NULL) < 0
 				|| context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
@@ -379,8 +382,7 @@ namespace {
 			ss.format = PA_SAMPLE_FLOAT32LE;
 
 			pa_stream_flags_t flags =
-				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE
-					| PA_STREAM_ADJUST_LATENCY | PA_STREAM_NOT_MONOTONIC);
+				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(p_spec.time_to_samples(buffer_length) * p_spec.m_channels * 4);
