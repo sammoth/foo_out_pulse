@@ -31,6 +31,7 @@ namespace {
 	static pa_stream_new g_pa_stream_new;
 	static pa_stream_connect_playback g_pa_stream_connect_playback;
 	static pa_stream_disconnect g_pa_stream_disconnect;
+	static pa_stream_unref g_pa_stream_unref;
 	static pa_stream_write g_pa_stream_write;
 	static pa_stream_cancel_write g_pa_stream_cancel_write;
 	static pa_stream_drop g_pa_stream_drop;
@@ -38,12 +39,14 @@ namespace {
 	static pa_stream_drain g_pa_stream_drain;
 	static pa_stream_set_write_callback g_pa_stream_set_write_callback;
 	static pa_stream_set_state_callback g_pa_stream_set_state_callback;
+	static pa_stream_set_started_callback g_pa_stream_set_started_callback;
 	static pa_stream_cork g_pa_stream_cork;
 	static pa_stream_flush g_pa_stream_flush;
 	static pa_stream_update_sample_rate g_pa_stream_update_sample_rate;
 	static pa_stream_get_state g_pa_stream_get_state;
 	static pa_stream_get_sample_spec g_pa_stream_get_sample_spec;
 	static pa_stream_get_latency g_pa_stream_get_latency;
+	static pa_stream_get_timing_info g_pa_stream_get_timing_info;
 	static pa_proplist_new g_pa_proplist_new;
 	static pa_proplist_free g_pa_proplist_free;
 	static pa_proplist_set g_pa_proplist_set;
@@ -61,7 +64,7 @@ namespace {
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
 	static bool g_pa_is_loaded = false;
 
-	class output_pulse : public output_impl
+	class output_pulse : public output_v4
 	{
 	private:
 
@@ -99,6 +102,7 @@ namespace {
 			g_pa_stream_new = (pa_stream_new)GetProcAddress(libpulse, "pa_stream_new");
 			g_pa_stream_connect_playback = (pa_stream_connect_playback)GetProcAddress(libpulse, "pa_stream_connect_playback");
 			g_pa_stream_disconnect = (pa_stream_disconnect)GetProcAddress(libpulse, "pa_stream_disconnect");
+			g_pa_stream_unref = (pa_stream_unref)GetProcAddress(libpulse, "pa_stream_unref");
 			g_pa_stream_write = (pa_stream_write)GetProcAddress(libpulse, "pa_stream_write");
 			g_pa_stream_cancel_write = (pa_stream_cancel_write)GetProcAddress(libpulse, "pa_stream_cancel_write");
 			g_pa_stream_drop = (pa_stream_drop)GetProcAddress(libpulse, "pa_stream_drop");
@@ -106,12 +110,14 @@ namespace {
 			g_pa_stream_drain = (pa_stream_drain)GetProcAddress(libpulse, "pa_stream_drain");
 			g_pa_stream_set_write_callback = (pa_stream_set_write_callback)GetProcAddress(libpulse, "pa_stream_set_write_callback");
 			g_pa_stream_set_state_callback = (pa_stream_set_state_callback)GetProcAddress(libpulse, "pa_stream_set_state_callback");
+			g_pa_stream_set_started_callback = (pa_stream_set_started_callback)GetProcAddress(libpulse, "pa_stream_set_started_callback");
 			g_pa_stream_cork = (pa_stream_cork)GetProcAddress(libpulse, "pa_stream_cork");
 			g_pa_stream_flush = (pa_stream_flush)GetProcAddress(libpulse, "pa_stream_flush");
 			g_pa_stream_update_sample_rate = (pa_stream_update_sample_rate)GetProcAddress(libpulse, "pa_stream_update_sample_rate");
 			g_pa_stream_get_state = (pa_stream_get_state)GetProcAddress(libpulse, "pa_stream_get_state");
 			g_pa_stream_get_sample_spec = (pa_stream_get_sample_spec)GetProcAddress(libpulse, "pa_stream_get_sample_spec");
 			g_pa_stream_get_latency = (pa_stream_get_latency)GetProcAddress(libpulse, "pa_stream_get_latency");
+			g_pa_stream_get_timing_info = (pa_stream_get_timing_info)GetProcAddress(libpulse, "pa_stream_get_timing_info");
 
 			g_pa_proplist_new = (pa_proplist_new)GetProcAddress(libpulse, "pa_proplist_new");
 			g_pa_proplist_free = (pa_proplist_free)GetProcAddress(libpulse, "pa_proplist_free");
@@ -139,23 +145,28 @@ namespace {
 		pa_threaded_mainloop* mainloop = NULL;
 		pa_stream* stream = NULL;
 
+		pfc::array_t<audio_sample, pfc::alloc_fast_aggressive> m_incoming;
+		t_size m_incoming_ptr;
+		t_samplespec m_incoming_spec, m_active_spec;
+
 		double buffer_length;
+
+		bool started;
 	public:
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
-			: buffer_length(p_buffer_length)
+			: buffer_length(p_buffer_length), m_incoming_ptr(0), started(false)
 		{
 			if (!g_pa_is_loaded)
 			{
 				load_pulse_dll();
 			}
 
-			// connect
 			mainloop = g_pa_threaded_mainloop_new();
 			if (g_pa_threaded_mainloop_start(mainloop) < 0)
 			{
-				// failed to start thread
 				g_pa_threaded_mainloop_free(mainloop);
-				// throw exception
+				console::error("PulseAudio: failed to start playback thread");
+				throw exception_output_invalidated();
 			}
 			pa_proplist* proplist = g_pa_proplist_new();
 			g_pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "foobar2000");
@@ -165,36 +176,31 @@ namespace {
 			pa_mainloop_api* api;
 			g_pa_threaded_mainloop_lock(mainloop);
 			api = g_pa_threaded_mainloop_get_api(mainloop);
-			context = g_pa_context_new_with_proplist(api, "foobar2000", proplist); // 2 invalid params
+			context = g_pa_context_new_with_proplist(api, "foobar2000", proplist);
 			if (proplist != NULL) g_pa_proplist_free(proplist);
 
 			g_pa_context_set_state_callback(context, context_state_cb, mainloop);
-			//pa_context_set_event_callback(context, context_event_cb, mainloop);
 
 			if (g_pa_context_connect(context, "192.168.1.68", (pa_context_flags_t)0, NULL) < 0
-				|| context_wait(context, mainloop)) // 1x invalid param
+				|| context_wait(context, mainloop))
 			{
-				// error connecting
 				g_pa_context_unref(context);
 				g_pa_threaded_mainloop_unlock(mainloop);
 				g_pa_threaded_mainloop_stop(mainloop);
 				g_pa_threaded_mainloop_free(mainloop);
-				// throw exception
+
+				console::error("PulseAudio: failed to connect");
+				throw exception_output_invalidated();
 			}
 
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
 		~output_pulse()
 		{
+			close_stream();
+
 			g_pa_threaded_mainloop_lock(mainloop);
-			if (stream != NULL)
-			{
-				// disconnect callbacks
-				g_pa_stream_disconnect(stream);
-				stream = NULL;
-			}
 			g_pa_context_disconnect(context);
-			//g_pa_context_set_event_callback(context, NULL, NULL);
 			g_pa_context_set_state_callback(context, NULL, NULL);
 			g_pa_context_unref(context);
 			g_pa_threaded_mainloop_unlock(mainloop);
@@ -255,10 +261,11 @@ namespace {
 			}
 		}
 
-		//static void context_event_cb(pa_context* c, const char* name, pa_proplist* pl,
-		//	void* userdata)
-		//{
-		//}
+		static void stream_started_cb(pa_stream* s, void* userdata)
+		{
+			output_pulse* output = (output_pulse*)userdata;
+			output->started = true;
+		}
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
 			const GUID device = { 0x2205583, 0xa73a, 0x1ca7, { 0xaa, 0xbb, 0x5f, 0x91, 0x8b, 0x1, 0x15, 0xd0 } };
@@ -281,10 +288,10 @@ namespace {
 		static void g_advanced_settings_popup(HWND p_parent, POINT p_menupoint) {}
 		static const char* g_get_name() { return "PulseAudio Output"; }
 
-		void on_update() override
+		void on_update()
 		{
 		}
-		void write(const audio_chunk& p_data) override
+		void write(const audio_chunk& p_data)
 		{
 			g_pa_threaded_mainloop_lock(mainloop);
 			if (g_pa_stream_write(stream, p_data.get_data(), p_data.get_used_size() * 4, NULL, 0, PA_SEEK_RELATIVE) < 0)
@@ -293,7 +300,7 @@ namespace {
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
-		t_size can_write_samples() override
+		t_size can_write_samples()
 		{
 			if (stream == NULL)
 			{
@@ -304,19 +311,19 @@ namespace {
 			size_t bytes = g_pa_stream_writable_size(stream);
 			return bytes / 4 / ss->channels;
 		}
-		t_size get_latency_samples() override
+		t_uint32 get_latency_samples()
 		{ // divide by channel number
-			pa_usec_t latency;
-			if (stream == NULL || g_pa_stream_get_latency(stream, &latency, NULL) < 0)
-			{
-				return 0;
-			}
-
-			const pa_sample_spec* ss = g_pa_stream_get_sample_spec(stream);
-			size_t bytes = g_pa_usec_to_bytes(latency, ss);
-			return bytes / 4 / ss->channels;
 		}
-		void on_flush() override
+		bool is_empty()
+		{
+			if (stream == NULL)
+				return true;
+
+			const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
+			return !info->write_index_corrupt && !info->read_index_corrupt
+				&& info->read_index == info->write_index;
+		}
+		void on_flush()
 		{
 			if (stream == NULL)
 				return;
@@ -329,7 +336,7 @@ namespace {
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
-		void on_flush_changing_track() override
+		void on_flush_changing_track()
 		{
 			if (stream == NULL)
 				return;
@@ -342,7 +349,19 @@ namespace {
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
-		void open(t_samplespec const& p_spec) override
+		void close_stream()
+		{
+			if (stream != NULL)
+			{
+				g_pa_threaded_mainloop_lock(mainloop);
+				g_pa_stream_set_state_callback(stream, NULL, NULL);
+				g_pa_stream_disconnect(stream);
+				g_pa_stream_unref(stream);
+				stream = NULL;
+				g_pa_threaded_mainloop_unlock(mainloop);
+			}
+		}
+		void open(t_samplespec const& p_spec)
 		{
 			pa_sample_spec ss;
 			ss.channels = p_spec.m_channels;
@@ -359,33 +378,31 @@ namespace {
 			attr.prebuf = (uint32_t)-1;
 			attr.tlength = (uint32_t)-1;
 
+			close_stream();
 
 			g_pa_threaded_mainloop_lock(mainloop);
-			if (stream != NULL)
-			{
-				// disconnect callbacks
-				g_pa_stream_set_state_callback(stream, NULL, NULL);
-				g_pa_stream_disconnect(stream);
-				stream = NULL;
-			}
-			stream = g_pa_stream_new(context, "Audio", &ss, NULL);
+			stream = g_pa_stream_new(context, std::to_string(ss.rate).c_str(), &ss, NULL);
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
-				console::error("PulseAudio stream creation failure");
-				// throw exception
+				console::error("PulseAudio: failed to create stream");
 				throw exception_output_invalidated();
 			}
-			// set stream callbacks
+
 			g_pa_stream_set_state_callback(stream, stream_state_cb, mainloop);
 			if (g_pa_stream_connect_playback(stream, NULL, &attr,
 				flags, NULL, NULL) < 0 || stream_wait(stream, mainloop))
 			{
-				// failure
+				g_pa_threaded_mainloop_unlock(mainloop);
+				console::error("PulseAudio: failed to connect stream");
+				throw exception_output_invalidated();
 			}
+
+			started = false;
+			g_pa_stream_set_started_callback(stream, stream_started_cb, this);
 
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
-		void pause(bool p_state) override
+		void pause(bool p_state)
 		{
 			if (stream == NULL)
 				return;
@@ -400,8 +417,6 @@ namespace {
 		}
 		void force_play() override
 		{
-			// if the stream is corked, do what?
-
 			g_pa_threaded_mainloop_lock(mainloop);
 			pa_operation* op = g_pa_stream_drain(stream, NULL, NULL);
 			if (op != NULL)
@@ -410,8 +425,79 @@ namespace {
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
+
 		void volume_set(double p_val) override
 		{
+		}
+
+		void flush() {
+			m_incoming_ptr = 0;
+			m_incoming.set_size(0);
+			on_flush();
+		}
+		void flush_changing_track() {
+			m_incoming_ptr = 0;
+			m_incoming.set_size(0);
+			on_flush_changing_track();
+		}
+
+		void update(bool& p_ready) {
+			p_ready = update_v2() > 0;
+		}
+		size_t update_v2() {
+			on_update();
+			if (m_incoming_spec != m_active_spec && m_incoming_ptr < m_incoming.get_size()) {
+				if (is_empty()) {
+					open(m_incoming_spec);
+					m_active_spec = m_incoming_spec;
+				}
+				else {
+					force_play();
+				}
+			}
+			size_t retCanWriteSamples = 0;
+			if (m_incoming_spec == m_active_spec && m_incoming_ptr < m_incoming.get_size()) {
+				t_size cw = can_write_samples() * m_incoming_spec.m_channels;
+				t_size delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw);
+				if (delta > 0) {
+					write(audio_chunk_temp_impl(m_incoming.get_ptr() + m_incoming_ptr, delta / m_incoming_spec.m_channels, m_incoming_spec.m_sample_rate, m_incoming_spec.m_channels, m_incoming_spec.m_channel_config));
+					m_incoming_ptr += delta;
+				}
+				retCanWriteSamples = (cw - delta) / m_incoming_spec.m_channels;
+			}
+			else if (m_incoming_ptr == m_incoming.get_size()) {
+				retCanWriteSamples = SIZE_MAX;
+			}
+			return retCanWriteSamples;
+		}
+
+		double get_latency() {
+			double ret = 0;
+			if (m_incoming_spec.is_valid()) {
+				ret += audio_math::samples_to_time((m_incoming.get_size() - m_incoming_ptr) / m_incoming_spec.m_channels, m_incoming_spec.m_sample_rate);
+			}
+			if (m_active_spec.is_valid()) {
+				pa_usec_t latency;
+				if (stream != NULL && g_pa_stream_get_latency(stream, &latency, NULL) > -1)
+				{
+					ret += (latency * 0.000001);
+				}
+			}
+			return ret;
+		}
+		void process_samples(const audio_chunk& p_chunk) {
+			pfc::dynamic_assert(m_incoming_ptr == m_incoming.get_size());
+			t_samplespec spec;
+			spec.fromchunk(p_chunk);
+			if (!spec.is_valid()) pfc::throw_exception_with_message< exception_io_data >("Invalid audio stream specifications");
+			m_incoming_spec = spec;
+			t_size length = p_chunk.get_used_size();
+			m_incoming.set_data_fromptr(p_chunk.get_data(), length);
+			m_incoming_ptr = 0;
+		}
+		bool is_progressing()
+		{
+			return started;
 		}
 	};
 

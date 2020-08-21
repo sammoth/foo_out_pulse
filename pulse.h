@@ -531,34 +531,34 @@ typedef enum pa_stream_flags {
 //#define PA_SUBSCRIPTION_EVENT_REMOVE PA_SUBSCRIPTION_EVENT_REMOVE
 //#define PA_SUBSCRIPTION_EVENT_TYPE_MASK PA_SUBSCRIPTION_EVENT_TYPE_MASK
 //
-//typedef struct pa_timing_info {
-//    struct timeval timestamp;
-//    
-//    int synchronized_clocks;
-//    
-//    pa_usec_t sink_usec;
-//    
-//    pa_usec_t source_usec;
-//    
-//    pa_usec_t transport_usec;
-//    
-//    int playing;
-//    
-//    int write_index_corrupt;
-//    
-//    int64_t write_index;
-//    
-//    int read_index_corrupt;
-//    
-//    int64_t read_index;
-//    
-//    pa_usec_t configured_sink_usec;
-//    
-//    pa_usec_t configured_source_usec;
-//    
-//    int64_t since_underrun;
-//    
-//} pa_timing_info;
+typedef struct pa_timing_info {
+    struct timeval timestamp;
+    
+    int synchronized_clocks;
+    
+    pa_usec_t sink_usec;
+    
+    pa_usec_t source_usec;
+    
+    pa_usec_t transport_usec;
+    
+    int playing;
+    
+    int write_index_corrupt;
+    
+    int64_t write_index;
+    
+    int read_index_corrupt;
+    
+    int64_t read_index;
+    
+    pa_usec_t configured_sink_usec;
+    
+    pa_usec_t configured_source_usec;
+    
+    int64_t since_underrun;
+    
+} pa_timing_info;
 typedef struct pa_spawn_api {
     void (*prefork)(void);
     void (*postfork)(void);
@@ -887,7 +887,7 @@ typedef pa_stream* (__cdecl *pa_stream_new)(
 //        pa_format_info * const * formats  ,
 //        unsigned int n_formats            ,
 //        pa_proplist *p                    );
-//void pa_stream_unref(pa_stream *s);
+typedef void (__cdecl *pa_stream_unref)(pa_stream *s);
 //pa_stream *pa_stream_ref(pa_stream *s);
 typedef pa_stream_state_t (__cdecl *pa_stream_get_state)(pa_stream *p);
 //pa_context* pa_stream_get_context(pa_stream *p);
@@ -942,7 +942,7 @@ typedef void (__cdecl *pa_stream_set_write_callback)(pa_stream *p, pa_stream_req
 //void pa_stream_set_overflow_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //int64_t pa_stream_get_underflow_index(pa_stream *p);
 //void pa_stream_set_underflow_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
-//void pa_stream_set_started_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
+typedef void (__cdecl *pa_stream_set_started_callback)(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //void pa_stream_set_latency_update_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //void pa_stream_set_moved_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //void pa_stream_set_suspended_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
@@ -955,7 +955,7 @@ typedef pa_operation* (__cdecl *pa_stream_flush)(pa_stream *s, pa_stream_success
 //pa_operation* pa_stream_set_name(pa_stream *s, const char *name, pa_stream_success_cb_t cb, void *userdata);
 //int pa_stream_get_time(pa_stream *s, pa_usec_t *r_usec);
 typedef int (__cdecl *pa_stream_get_latency)(pa_stream *s, pa_usec_t *r_usec, int *negative);
-//const pa_timing_info* pa_stream_get_timing_info(pa_stream *s);
+typedef const pa_timing_info* (__cdecl *pa_stream_get_timing_info)(pa_stream *s);
 typedef const pa_sample_spec* (__cdecl *pa_stream_get_sample_spec)(pa_stream *s);
 //const pa_channel_map* pa_stream_get_channel_map(pa_stream *s);
 //const pa_format_info* pa_stream_get_format_info(pa_stream *s);
