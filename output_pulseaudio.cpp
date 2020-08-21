@@ -311,9 +311,6 @@ namespace {
 			size_t bytes = g_pa_stream_writable_size(stream);
 			return bytes / 4 / ss->channels;
 		}
-		t_uint32 get_latency_samples()
-		{ // divide by channel number
-		}
 		bool is_empty()
 		{
 			if (stream == NULL)
