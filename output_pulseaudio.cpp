@@ -74,6 +74,7 @@ namespace {
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
 	static pa_channel_map_init_auto g_pa_channel_map_init_auto;
 	static bool g_pa_is_loaded = false;
+	static bool is_using_winelib = false;
 
 	class output_pulse : public output_v4
 	{
@@ -152,6 +153,10 @@ namespace {
 			g_pa_bytes_to_usec = (pa_bytes_to_usec)GetProcAddress(libpulse, "pa_bytes_to_usec");
 			g_pa_usec_to_bytes = (pa_usec_to_bytes)GetProcAddress(libpulse, "pa_usec_to_bytes");
 
+			void* winelib = GetProcAddress(libpulse, "foo_out_pulse_winelib_dll");
+
+			is_using_winelib = winelib != NULL;
+			console::info(is_using_winelib ? "Pulseaudio: using winelib libpulse" : "Pulseaudio: Using Windows libpulse");
 			g_pa_is_loaded = true;
 		}
 
@@ -195,7 +200,8 @@ namespace {
 
 			g_pa_context_set_state_callback(context, context_state_cb, mainloop);
 
-			if (g_pa_context_connect(context, NULL, (pa_context_flags_t)0, NULL) < 0
+			const char* server = is_using_winelib ? NULL : "127.0.0.1";
+			if (g_pa_context_connect(context, server, (pa_context_flags_t)0, NULL) < 0
 				|| context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
