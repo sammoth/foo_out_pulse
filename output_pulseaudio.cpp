@@ -18,6 +18,7 @@
 // ip configuraion GUI
 // try compiling pulseaudio 1.1 and modify with syscall assembly
 // investigate dynamically loading the linux .so
+// handle the network being blocked or pulseaudio daemon disappearing - at the moment the track starts progressing at max speed
 
 namespace {
 	typedef HRESULT(CALLBACK* LPFNDLLFUNC1)(DWORD, UINT*);
