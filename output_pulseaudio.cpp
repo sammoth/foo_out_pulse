@@ -282,7 +282,7 @@ namespace {
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
 			const GUID device = { 0x2205583, 0xa73a, 0x1ca7, { 0xaa, 0xbb, 0x5f, 0x91, 0x8b, 0x1, 0x15, 0xd0 } };
-			p_callback.on_device(device, "PulseAudio", 10);
+			p_callback.on_device(device, "Pulseaudio (localhost)", 22);
 		}
 		static GUID g_get_guid() {
 			//This is our GUID. Generate your own one when reusing this code.
@@ -391,7 +391,7 @@ namespace {
 			close_stream();
 
 			g_pa_threaded_mainloop_lock(mainloop);
-			stream = g_pa_stream_new(context, std::to_string(ss.rate).c_str(), &ss, NULL);
+			stream = g_pa_stream_new(context, "Audio", &ss, NULL);
 			progressing = false;
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
