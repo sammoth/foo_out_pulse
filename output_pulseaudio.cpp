@@ -173,7 +173,7 @@ namespace {
 			{
 				g_pa_threaded_mainloop_free(mainloop);
 				console::error("PulseAudio: failed to start playback thread");
-				throw exception_output_device_not_found();
+				throw exception_output_invalidated();
 			}
 			pa_proplist* proplist = g_pa_proplist_new();
 			g_pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "foobar2000");
@@ -197,7 +197,7 @@ namespace {
 				g_pa_threaded_mainloop_free(mainloop);
 
 				console::error("PulseAudio: failed to connect");
-				throw exception_output_device_not_found();
+				throw exception_output_invalidated();
 			}
 
 			g_pa_threaded_mainloop_unlock(mainloop);
@@ -396,7 +396,7 @@ namespace {
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
 				console::error("PulseAudio: failed to create stream");
-				throw exception_output_device_not_found();
+				throw exception_output_invalidated();
 			}
 
 			g_pa_stream_set_state_callback(stream, stream_state_cb, mainloop);
@@ -405,7 +405,7 @@ namespace {
 			{
 				g_pa_threaded_mainloop_unlock(mainloop);
 				console::error("PulseAudio: failed to connect stream");
-				throw exception_output_device_not_found();
+				throw exception_output_invalidated();
 			}
 
 			g_pa_stream_set_started_callback(stream, stream_started_cb, this);
