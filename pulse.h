@@ -941,7 +941,7 @@ typedef void (__cdecl *pa_stream_set_write_callback)(pa_stream *p, pa_stream_req
 //void pa_stream_set_read_callback(pa_stream *p, pa_stream_request_cb_t cb, void *userdata);
 //void pa_stream_set_overflow_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //int64_t pa_stream_get_underflow_index(pa_stream *p);
-//void pa_stream_set_underflow_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
+typedef void (__cdecl *pa_stream_set_underflow_callback)(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 typedef void (__cdecl *pa_stream_set_started_callback)(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //void pa_stream_set_latency_update_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);
 //void pa_stream_set_moved_callback(pa_stream *p, pa_stream_notify_cb_t cb, void *userdata);

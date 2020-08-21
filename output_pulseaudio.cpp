@@ -13,6 +13,11 @@
 //static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio Output", guid_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
 //static advconfig_integer_factory cfg_pulseaudio_destination_port("Destination port", guid_pulseaudio_cfg_destination_port, guid_pulseaudio_branch, 0, 4010, 0, 65535, 0);
 
+// todo: check every operation is unreferenced
+// implement cookies
+// ip configuraion GUI
+// try compiling pulseaudio 1.1 and modify with syscall assembly
+// investigate dynamically loading the linux .so
 
 namespace {
 	typedef HRESULT(CALLBACK* LPFNDLLFUNC1)(DWORD, UINT*);
@@ -40,6 +45,7 @@ namespace {
 	static pa_stream_set_write_callback g_pa_stream_set_write_callback;
 	static pa_stream_set_state_callback g_pa_stream_set_state_callback;
 	static pa_stream_set_started_callback g_pa_stream_set_started_callback;
+	static pa_stream_set_underflow_callback g_pa_stream_set_underflow_callback;
 	static pa_stream_cork g_pa_stream_cork;
 	static pa_stream_flush g_pa_stream_flush;
 	static pa_stream_update_sample_rate g_pa_stream_update_sample_rate;
@@ -111,6 +117,7 @@ namespace {
 			g_pa_stream_set_write_callback = (pa_stream_set_write_callback)GetProcAddress(libpulse, "pa_stream_set_write_callback");
 			g_pa_stream_set_state_callback = (pa_stream_set_state_callback)GetProcAddress(libpulse, "pa_stream_set_state_callback");
 			g_pa_stream_set_started_callback = (pa_stream_set_started_callback)GetProcAddress(libpulse, "pa_stream_set_started_callback");
+			g_pa_stream_set_underflow_callback = (pa_stream_set_underflow_callback)GetProcAddress(libpulse, "pa_stream_set_underflow_callback");
 			g_pa_stream_cork = (pa_stream_cork)GetProcAddress(libpulse, "pa_stream_cork");
 			g_pa_stream_flush = (pa_stream_flush)GetProcAddress(libpulse, "pa_stream_flush");
 			g_pa_stream_update_sample_rate = (pa_stream_update_sample_rate)GetProcAddress(libpulse, "pa_stream_update_sample_rate");
@@ -151,10 +158,10 @@ namespace {
 
 		double buffer_length;
 
-		bool started;
+		bool progressing;
 	public:
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
-			: buffer_length(p_buffer_length), m_incoming_ptr(0), started(false)
+			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false)
 		{
 			if (!g_pa_is_loaded)
 			{
@@ -264,7 +271,13 @@ namespace {
 		static void stream_started_cb(pa_stream* s, void* userdata)
 		{
 			output_pulse* output = (output_pulse*)userdata;
-			output->started = true;
+			output->progressing = true;
+		}
+
+		static void stream_underflow_cb(pa_stream* s, void* userdata)
+		{
+			output_pulse* output = (output_pulse*)userdata;
+			output->progressing = false;
 		}
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
@@ -349,9 +362,11 @@ namespace {
 			{
 				g_pa_threaded_mainloop_lock(mainloop);
 				g_pa_stream_set_state_callback(stream, NULL, NULL);
+				g_pa_stream_set_started_callback(stream, NULL, NULL);
 				g_pa_stream_disconnect(stream);
 				g_pa_stream_unref(stream);
 				stream = NULL;
+				progressing = false;
 				g_pa_threaded_mainloop_unlock(mainloop);
 			}
 		}
@@ -363,7 +378,8 @@ namespace {
 			ss.format = PA_SAMPLE_FLOAT32LE;
 
 			pa_stream_flags_t flags =
-				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
+				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE
+					| PA_STREAM_ADJUST_LATENCY | PA_STREAM_NOT_MONOTONIC);
 
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(p_spec.time_to_samples(buffer_length) * p_spec.m_channels * 4);
@@ -376,6 +392,7 @@ namespace {
 
 			g_pa_threaded_mainloop_lock(mainloop);
 			stream = g_pa_stream_new(context, std::to_string(ss.rate).c_str(), &ss, NULL);
+			progressing = false;
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
 				console::error("PulseAudio: failed to create stream");
@@ -391,8 +408,8 @@ namespace {
 				throw exception_output_invalidated();
 			}
 
-			started = false;
 			g_pa_stream_set_started_callback(stream, stream_started_cb, this);
+			g_pa_stream_set_underflow_callback(stream, stream_underflow_cb, this);
 
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
@@ -490,7 +507,7 @@ namespace {
 		}
 		bool is_progressing()
 		{
-			return started;
+			return progressing;
 		}
 	};
 
