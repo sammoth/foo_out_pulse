@@ -288,9 +288,6 @@ namespace {
 		static void g_advanced_settings_popup(HWND p_parent, POINT p_menupoint) {}
 		static const char* g_get_name() { return "PulseAudio Output"; }
 
-		void on_update()
-		{
-		}
 		void write(const audio_chunk& p_data)
 		{
 			g_pa_threaded_mainloop_lock(mainloop);
@@ -442,7 +439,6 @@ namespace {
 			p_ready = update_v2() > 0;
 		}
 		size_t update_v2() {
-			on_update();
 			if (m_incoming_spec != m_active_spec && m_incoming_ptr < m_incoming.get_size()) {
 				if (is_empty()) {
 					open(m_incoming_spec);
