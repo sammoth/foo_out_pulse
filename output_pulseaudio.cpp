@@ -72,9 +72,6 @@ namespace {
 	static pa_operation_unref g_pa_operation_unref;
 	static pa_bytes_to_usec g_pa_bytes_to_usec;
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
-	static pa_channel_map_init g_pa_channel_map_init;
-	static pa_channel_map_init_mono g_pa_channel_map_init_mono;
-	static pa_channel_map_init_stereo g_pa_channel_map_init_stereo;
 	static pa_channel_map_init_auto g_pa_channel_map_init_auto;
 	static bool g_pa_is_loaded = false;
 
@@ -148,9 +145,6 @@ namespace {
 			g_pa_context_set_state_callback = (pa_context_set_state_callback)GetProcAddress(libpulse, "pa_context_set_state_callback");
 			g_pa_context_set_event_callback = (pa_context_set_event_callback)GetProcAddress(libpulse, "pa_context_set_event_callback");
 
-			g_pa_channel_map_init = (pa_channel_map_init)GetProcAddress(libpulse, "pa_channel_map_init");
-			g_pa_channel_map_init_mono = (pa_channel_map_init_mono)GetProcAddress(libpulse, "pa_channel_map_init_mono");
-			g_pa_channel_map_init_stereo = (pa_channel_map_init_stereo)GetProcAddress(libpulse, "pa_channel_map_init_stereo");
 			g_pa_channel_map_init_auto = (pa_channel_map_init_auto)GetProcAddress(libpulse, "pa_channel_map_init_auto");
 
 			g_pa_operation_unref = (pa_operation_unref)GetProcAddress(libpulse, "pa_operation_unref");
@@ -201,7 +195,7 @@ namespace {
 
 			g_pa_context_set_state_callback(context, context_state_cb, mainloop);
 
-			if (g_pa_context_connect(context, "192.168.1.68", (pa_context_flags_t)0, NULL) < 0
+			if (g_pa_context_connect(context, NULL, (pa_context_flags_t)0, NULL) < 0
 				|| context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
