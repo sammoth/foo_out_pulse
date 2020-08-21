@@ -13,53 +13,53 @@
 //static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio Output", guid_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
 //static advconfig_integer_factory cfg_pulseaudio_destination_port("Destination port", guid_pulseaudio_cfg_destination_port, guid_pulseaudio_branch, 0, 4010, 0, 65535, 0);
 
-static pa_strerror g_pa_strerror;
-static pa_threaded_mainloop_new g_pa_threaded_mainloop_new;
-static pa_threaded_mainloop_free g_pa_threaded_mainloop_free;
-static pa_threaded_mainloop_start g_pa_threaded_mainloop_start;
-static pa_threaded_mainloop_stop g_pa_threaded_mainloop_stop;
-static pa_threaded_mainloop_lock g_pa_threaded_mainloop_lock;
-static pa_threaded_mainloop_unlock g_pa_threaded_mainloop_unlock;
-static pa_threaded_mainloop_wait g_pa_threaded_mainloop_wait;
-static pa_threaded_mainloop_signal g_pa_threaded_mainloop_signal;
-static pa_threaded_mainloop_accept g_pa_threaded_mainloop_accept;
-static pa_threaded_mainloop_get_retval g_pa_threaded_mainloop_get_retval;
-static pa_threaded_mainloop_get_api g_pa_threaded_mainloop_get_api;
-static pa_stream_new g_pa_stream_new;
-static pa_stream_connect_playback g_pa_stream_connect_playback;
-static pa_stream_disconnect g_pa_stream_disconnect;
-static pa_stream_write g_pa_stream_write;
-static pa_stream_cancel_write g_pa_stream_cancel_write;
-static pa_stream_drop g_pa_stream_drop;
-static pa_stream_writable_size g_pa_stream_writable_size;
-static pa_stream_drain g_pa_stream_drain;
-static pa_stream_set_write_callback g_pa_stream_set_write_callback;
-static pa_stream_set_state_callback g_pa_stream_set_state_callback;
-static pa_stream_cork g_pa_stream_cork;
-static pa_stream_flush g_pa_stream_flush;
-static pa_stream_update_sample_rate g_pa_stream_update_sample_rate;
-static pa_stream_get_state g_pa_stream_get_state;
-static pa_stream_get_sample_spec g_pa_stream_get_sample_spec;
-static pa_stream_get_latency g_pa_stream_get_latency;
-static pa_proplist_new g_pa_proplist_new;
-static pa_proplist_free g_pa_proplist_free;
-static pa_proplist_set g_pa_proplist_set;
-static pa_proplist_sets g_pa_proplist_sets;
-static pa_proplist_setp g_pa_proplist_setp;
-static pa_context_new_with_proplist g_pa_context_new_with_proplist;
-static pa_context_unref g_pa_context_unref;
-static pa_context_connect g_pa_context_connect;
-static pa_context_disconnect g_pa_context_disconnect;
-static pa_context_get_state g_pa_context_get_state;
-static pa_context_set_state_callback g_pa_context_set_state_callback;
-static pa_context_set_event_callback g_pa_context_set_event_callback;
-static pa_operation_unref g_pa_operation_unref;
-static pa_bytes_to_usec g_pa_bytes_to_usec;
-static pa_usec_to_bytes g_pa_usec_to_bytes;
-static bool g_pa_is_loaded = false;
 
 namespace {
 	typedef HRESULT(CALLBACK* LPFNDLLFUNC1)(DWORD, UINT*);
+	static pa_strerror g_pa_strerror;
+	static pa_threaded_mainloop_new g_pa_threaded_mainloop_new;
+	static pa_threaded_mainloop_free g_pa_threaded_mainloop_free;
+	static pa_threaded_mainloop_start g_pa_threaded_mainloop_start;
+	static pa_threaded_mainloop_stop g_pa_threaded_mainloop_stop;
+	static pa_threaded_mainloop_lock g_pa_threaded_mainloop_lock;
+	static pa_threaded_mainloop_unlock g_pa_threaded_mainloop_unlock;
+	static pa_threaded_mainloop_wait g_pa_threaded_mainloop_wait;
+	static pa_threaded_mainloop_signal g_pa_threaded_mainloop_signal;
+	static pa_threaded_mainloop_accept g_pa_threaded_mainloop_accept;
+	static pa_threaded_mainloop_get_retval g_pa_threaded_mainloop_get_retval;
+	static pa_threaded_mainloop_get_api g_pa_threaded_mainloop_get_api;
+	static pa_stream_new g_pa_stream_new;
+	static pa_stream_connect_playback g_pa_stream_connect_playback;
+	static pa_stream_disconnect g_pa_stream_disconnect;
+	static pa_stream_write g_pa_stream_write;
+	static pa_stream_cancel_write g_pa_stream_cancel_write;
+	static pa_stream_drop g_pa_stream_drop;
+	static pa_stream_writable_size g_pa_stream_writable_size;
+	static pa_stream_drain g_pa_stream_drain;
+	static pa_stream_set_write_callback g_pa_stream_set_write_callback;
+	static pa_stream_set_state_callback g_pa_stream_set_state_callback;
+	static pa_stream_cork g_pa_stream_cork;
+	static pa_stream_flush g_pa_stream_flush;
+	static pa_stream_update_sample_rate g_pa_stream_update_sample_rate;
+	static pa_stream_get_state g_pa_stream_get_state;
+	static pa_stream_get_sample_spec g_pa_stream_get_sample_spec;
+	static pa_stream_get_latency g_pa_stream_get_latency;
+	static pa_proplist_new g_pa_proplist_new;
+	static pa_proplist_free g_pa_proplist_free;
+	static pa_proplist_set g_pa_proplist_set;
+	static pa_proplist_sets g_pa_proplist_sets;
+	static pa_proplist_setp g_pa_proplist_setp;
+	static pa_context_new_with_proplist g_pa_context_new_with_proplist;
+	static pa_context_unref g_pa_context_unref;
+	static pa_context_connect g_pa_context_connect;
+	static pa_context_disconnect g_pa_context_disconnect;
+	static pa_context_get_state g_pa_context_get_state;
+	static pa_context_set_state_callback g_pa_context_set_state_callback;
+	static pa_context_set_event_callback g_pa_context_set_event_callback;
+	static pa_operation_unref g_pa_operation_unref;
+	static pa_bytes_to_usec g_pa_bytes_to_usec;
+	static pa_usec_to_bytes g_pa_usec_to_bytes;
+	static bool g_pa_is_loaded = false;
 
 	class output_pulse : public output_impl
 	{
@@ -138,8 +138,11 @@ namespace {
 		pa_context* context = NULL;
 		pa_threaded_mainloop* mainloop = NULL;
 		pa_stream* stream = NULL;
+
+		double buffer_length;
 	public:
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
+			: buffer_length(p_buffer_length)
 		{
 			if (!g_pa_is_loaded)
 			{
@@ -315,6 +318,9 @@ namespace {
 		}
 		void on_flush() override
 		{
+			if (stream == NULL)
+				return;
+
 			g_pa_threaded_mainloop_lock(mainloop);
 			pa_operation* op = g_pa_stream_flush(stream, NULL, NULL);
 			if (op != NULL)
@@ -325,6 +331,9 @@ namespace {
 		}
 		void on_flush_changing_track() override
 		{
+			if (stream == NULL)
+				return;
+
 			g_pa_threaded_mainloop_lock(mainloop);
 			pa_operation* op = g_pa_stream_flush(stream, NULL, NULL);
 			if (op != NULL)
@@ -344,7 +353,7 @@ namespace {
 				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
-			attr.maxlength = (uint32_t)-1;
+			attr.maxlength = ceil(p_spec.time_to_samples(buffer_length) * p_spec.m_channels * 4);
 			attr.fragsize = 0;
 			attr.minreq = (uint32_t)-1;
 			attr.prebuf = (uint32_t)-1;
@@ -378,8 +387,11 @@ namespace {
 		}
 		void pause(bool p_state) override
 		{
+			if (stream == NULL)
+				return;
+
 			g_pa_threaded_mainloop_lock(mainloop);
-			pa_operation* op = g_pa_stream_cork(stream, p_state?1:0, NULL, NULL);
+			pa_operation* op = g_pa_stream_cork(stream, p_state ? 1 : 0, NULL, NULL);
 			if (op != NULL)
 			{
 				g_pa_operation_unref(op);
