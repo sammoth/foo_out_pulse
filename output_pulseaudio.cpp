@@ -72,6 +72,10 @@ namespace {
 	static pa_operation_unref g_pa_operation_unref;
 	static pa_bytes_to_usec g_pa_bytes_to_usec;
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
+	static pa_channel_map_init g_pa_channel_map_init;
+	static pa_channel_map_init_mono g_pa_channel_map_init_mono;
+	static pa_channel_map_init_stereo g_pa_channel_map_init_stereo;
+	static pa_channel_map_init_auto g_pa_channel_map_init_auto;
 	static bool g_pa_is_loaded = false;
 
 	class output_pulse : public output_v4
@@ -144,6 +148,11 @@ namespace {
 			g_pa_context_set_state_callback = (pa_context_set_state_callback)GetProcAddress(libpulse, "pa_context_set_state_callback");
 			g_pa_context_set_event_callback = (pa_context_set_event_callback)GetProcAddress(libpulse, "pa_context_set_event_callback");
 
+			g_pa_channel_map_init = (pa_channel_map_init)GetProcAddress(libpulse, "pa_channel_map_init");
+			g_pa_channel_map_init_mono = (pa_channel_map_init_mono)GetProcAddress(libpulse, "pa_channel_map_init_mono");
+			g_pa_channel_map_init_stereo = (pa_channel_map_init_stereo)GetProcAddress(libpulse, "pa_channel_map_init_stereo");
+			g_pa_channel_map_init_auto = (pa_channel_map_init_auto)GetProcAddress(libpulse, "pa_channel_map_init_auto");
+
 			g_pa_operation_unref = (pa_operation_unref)GetProcAddress(libpulse, "pa_operation_unref");
 
 			g_pa_bytes_to_usec = (pa_bytes_to_usec)GetProcAddress(libpulse, "pa_bytes_to_usec");
@@ -192,7 +201,7 @@ namespace {
 
 			g_pa_context_set_state_callback(context, context_state_cb, mainloop);
 
-			if (g_pa_context_connect(context, NULL, (pa_context_flags_t)0, NULL) < 0
+			if (g_pa_context_connect(context, "192.168.1.68", (pa_context_flags_t)0, NULL) < 0
 				|| context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
@@ -286,7 +295,7 @@ namespace {
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
 			const GUID device = { 0x2205583, 0xa73a, 0x1ca7, { 0xaa, 0xbb, 0x5f, 0x91, 0x8b, 0x1, 0x15, 0xd0 } };
-			p_callback.on_device(device, "Pulseaudio (localhost)", 22);
+			p_callback.on_device(device, "Pulseaudio", 10);
 		}
 		static GUID g_get_guid() {
 			//This is our GUID. Generate your own one when reusing this code.
@@ -331,8 +340,8 @@ namespace {
 				return true;
 
 			const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
-			return !info->write_index_corrupt && !info->read_index_corrupt
-				&& info->read_index == info->write_index;
+			return info->write_index_corrupt || info->read_index_corrupt
+				|| info->read_index == info->write_index;
 		}
 		void on_flush()
 		{
@@ -367,6 +376,7 @@ namespace {
 				g_pa_threaded_mainloop_lock(mainloop);
 				g_pa_stream_set_state_callback(stream, NULL, NULL);
 				g_pa_stream_set_started_callback(stream, NULL, NULL);
+				g_pa_stream_set_underflow_callback(stream, NULL, NULL);
 				g_pa_stream_disconnect(stream);
 				g_pa_stream_unref(stream);
 				stream = NULL;
@@ -381,8 +391,12 @@ namespace {
 			ss.rate = p_spec.m_sample_rate;
 			ss.format = PA_SAMPLE_FLOAT32LE;
 
+			struct pa_channel_map map;
+			const pa_channel_map* map_ptr = g_pa_channel_map_init_auto(&map, ss.channels, PA_CHANNEL_MAP_WAVEEX);
+
 			pa_stream_flags_t flags =
-				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
+				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE
+					| PA_STREAM_NOT_MONOTONIC);
 
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(p_spec.time_to_samples(buffer_length) * p_spec.m_channels * 4);
@@ -394,7 +408,7 @@ namespace {
 			close_stream();
 
 			g_pa_threaded_mainloop_lock(mainloop);
-			stream = g_pa_stream_new(context, "Audio", &ss, NULL);
+			stream = g_pa_stream_new(context, "Audio", &ss, map_ptr);
 			progressing = false;
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
@@ -403,6 +417,9 @@ namespace {
 			}
 
 			g_pa_stream_set_state_callback(stream, stream_state_cb, mainloop);
+			g_pa_stream_set_started_callback(stream, stream_started_cb, this);
+			g_pa_stream_set_underflow_callback(stream, stream_underflow_cb, this);
+
 			if (g_pa_stream_connect_playback(stream, NULL, &attr,
 				flags, NULL, NULL) < 0 || stream_wait(stream, mainloop))
 			{
@@ -410,9 +427,6 @@ namespace {
 				console::error("PulseAudio: failed to connect stream");
 				throw exception_output_invalidated();
 			}
-
-			g_pa_stream_set_started_callback(stream, stream_started_cb, this);
-			g_pa_stream_set_underflow_callback(stream, stream_underflow_cb, this);
 
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}

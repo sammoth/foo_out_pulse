@@ -986,3 +986,136 @@ typedef size_t (__cdecl *pa_usec_to_bytes)(pa_usec_t t, const pa_sample_spec *sp
 //void pa_mainloop_wakeup(pa_mainloop *m);
 //void pa_mainloop_set_poll_func(pa_mainloop *m, pa_poll_func poll_func, void *userdata);
 
+
+
+/** \cond fulldocs */
+#define PA_CHANNEL_POSITION_INVALID PA_CHANNEL_POSITION_INVALID
+#define PA_CHANNEL_POSITION_MONO PA_CHANNEL_POSITION_MONO
+#define PA_CHANNEL_POSITION_LEFT PA_CHANNEL_POSITION_LEFT
+#define PA_CHANNEL_POSITION_RIGHT PA_CHANNEL_POSITION_RIGHT
+#define PA_CHANNEL_POSITION_CENTER PA_CHANNEL_POSITION_CENTER
+#define PA_CHANNEL_POSITION_FRONT_LEFT PA_CHANNEL_POSITION_FRONT_LEFT
+#define PA_CHANNEL_POSITION_FRONT_RIGHT PA_CHANNEL_POSITION_FRONT_RIGHT
+#define PA_CHANNEL_POSITION_FRONT_CENTER PA_CHANNEL_POSITION_FRONT_CENTER
+#define PA_CHANNEL_POSITION_REAR_CENTER PA_CHANNEL_POSITION_REAR_CENTER
+#define PA_CHANNEL_POSITION_REAR_LEFT PA_CHANNEL_POSITION_REAR_LEFT
+#define PA_CHANNEL_POSITION_REAR_RIGHT PA_CHANNEL_POSITION_REAR_RIGHT
+#define PA_CHANNEL_POSITION_LFE PA_CHANNEL_POSITION_LFE
+#define PA_CHANNEL_POSITION_SUBWOOFER PA_CHANNEL_POSITION_SUBWOOFER
+#define PA_CHANNEL_POSITION_FRONT_LEFT_OF_CENTER PA_CHANNEL_POSITION_FRONT_LEFT_OF_CENTER
+#define PA_CHANNEL_POSITION_FRONT_RIGHT_OF_CENTER PA_CHANNEL_POSITION_FRONT_RIGHT_OF_CENTER
+#define PA_CHANNEL_POSITION_SIDE_LEFT PA_CHANNEL_POSITION_SIDE_LEFT
+#define PA_CHANNEL_POSITION_SIDE_RIGHT PA_CHANNEL_POSITION_SIDE_RIGHT
+#define PA_CHANNEL_POSITION_AUX0 PA_CHANNEL_POSITION_AUX0
+#define PA_CHANNEL_POSITION_AUX1 PA_CHANNEL_POSITION_AUX1
+#define PA_CHANNEL_POSITION_AUX2 PA_CHANNEL_POSITION_AUX2
+#define PA_CHANNEL_POSITION_AUX3 PA_CHANNEL_POSITION_AUX3
+#define PA_CHANNEL_POSITION_AUX4 PA_CHANNEL_POSITION_AUX4
+#define PA_CHANNEL_POSITION_AUX5 PA_CHANNEL_POSITION_AUX5
+#define PA_CHANNEL_POSITION_AUX6 PA_CHANNEL_POSITION_AUX6
+#define PA_CHANNEL_POSITION_AUX7 PA_CHANNEL_POSITION_AUX7
+#define PA_CHANNEL_POSITION_AUX8 PA_CHANNEL_POSITION_AUX8
+#define PA_CHANNEL_POSITION_AUX9 PA_CHANNEL_POSITION_AUX9
+#define PA_CHANNEL_POSITION_AUX10 PA_CHANNEL_POSITION_AUX10
+#define PA_CHANNEL_POSITION_AUX11 PA_CHANNEL_POSITION_AUX11
+#define PA_CHANNEL_POSITION_AUX12 PA_CHANNEL_POSITION_AUX12
+#define PA_CHANNEL_POSITION_AUX13 PA_CHANNEL_POSITION_AUX13
+#define PA_CHANNEL_POSITION_AUX14 PA_CHANNEL_POSITION_AUX14
+#define PA_CHANNEL_POSITION_AUX15 PA_CHANNEL_POSITION_AUX15
+#define PA_CHANNEL_POSITION_AUX16 PA_CHANNEL_POSITION_AUX16
+#define PA_CHANNEL_POSITION_AUX17 PA_CHANNEL_POSITION_AUX17
+#define PA_CHANNEL_POSITION_AUX18 PA_CHANNEL_POSITION_AUX18
+#define PA_CHANNEL_POSITION_AUX19 PA_CHANNEL_POSITION_AUX19
+#define PA_CHANNEL_POSITION_AUX20 PA_CHANNEL_POSITION_AUX20
+#define PA_CHANNEL_POSITION_AUX21 PA_CHANNEL_POSITION_AUX21
+#define PA_CHANNEL_POSITION_AUX22 PA_CHANNEL_POSITION_AUX22
+#define PA_CHANNEL_POSITION_AUX23 PA_CHANNEL_POSITION_AUX23
+#define PA_CHANNEL_POSITION_AUX24 PA_CHANNEL_POSITION_AUX24
+#define PA_CHANNEL_POSITION_AUX25 PA_CHANNEL_POSITION_AUX25
+#define PA_CHANNEL_POSITION_AUX26 PA_CHANNEL_POSITION_AUX26
+#define PA_CHANNEL_POSITION_AUX27 PA_CHANNEL_POSITION_AUX27
+#define PA_CHANNEL_POSITION_AUX28 PA_CHANNEL_POSITION_AUX28
+#define PA_CHANNEL_POSITION_AUX29 PA_CHANNEL_POSITION_AUX29
+#define PA_CHANNEL_POSITION_AUX30 PA_CHANNEL_POSITION_AUX30
+#define PA_CHANNEL_POSITION_AUX31 PA_CHANNEL_POSITION_AUX31
+#define PA_CHANNEL_POSITION_TOP_CENTER PA_CHANNEL_POSITION_TOP_CENTER
+#define PA_CHANNEL_POSITION_TOP_FRONT_LEFT PA_CHANNEL_POSITION_TOP_FRONT_LEFT
+#define PA_CHANNEL_POSITION_TOP_FRONT_RIGHT PA_CHANNEL_POSITION_TOP_FRONT_RIGHT
+#define PA_CHANNEL_POSITION_TOP_FRONT_CENTER PA_CHANNEL_POSITION_TOP_FRONT_CENTER
+#define PA_CHANNEL_POSITION_TOP_REAR_LEFT PA_CHANNEL_POSITION_TOP_REAR_LEFT
+#define PA_CHANNEL_POSITION_TOP_REAR_RIGHT PA_CHANNEL_POSITION_TOP_REAR_RIGHT
+#define PA_CHANNEL_POSITION_TOP_REAR_CENTER PA_CHANNEL_POSITION_TOP_REAR_CENTER
+#define PA_CHANNEL_POSITION_MAX PA_CHANNEL_POSITION_MAX
+/** \endcond */
+
+/** A mask of channel positions. \since 0.9.16 */
+typedef uint64_t pa_channel_position_mask_t;
+
+/** Makes a bit mask from a channel position. \since 0.9.16 */
+#define PA_CHANNEL_POSITION_MASK(f) ((pa_channel_position_mask_t) (1ULL << (f)))
+
+/** A list of channel mapping definitions for pa_channel_map_init_auto() */
+typedef enum pa_channel_map_def {
+    PA_CHANNEL_MAP_AIFF,
+    /**< The mapping from RFC3551, which is based on AIFF-C */
+
+/** \cond fulldocs */
+    PA_CHANNEL_MAP_ALSA,
+    /**< The default mapping used by ALSA. This mapping is probably
+     * not too useful since ALSA's default channel mapping depends on
+     * the device string used. */
+/** \endcond */
+
+    PA_CHANNEL_MAP_AUX,
+    /**< Only aux channels */
+
+    PA_CHANNEL_MAP_WAVEEX,
+    /**< Microsoft's WAVEFORMATEXTENSIBLE mapping. This mapping works
+     * as if all LSBs of dwChannelMask are set.  */
+
+/** \cond fulldocs */
+    PA_CHANNEL_MAP_OSS,
+    /**< The default channel mapping used by OSS as defined in the OSS
+     * 4.0 API specs. This mapping is probably not too useful since
+     * the OSS API has changed in this respect and no longer knows a
+     * default channel mapping based on the number of channels. */
+/** \endcond */
+
+    /**< Upper limit of valid channel mapping definitions */
+    PA_CHANNEL_MAP_DEF_MAX,
+
+    PA_CHANNEL_MAP_DEFAULT = PA_CHANNEL_MAP_AIFF
+    /**< The default channel map */
+} pa_channel_map_def_t;
+
+/** \cond fulldocs */
+#define PA_CHANNEL_MAP_AIFF PA_CHANNEL_MAP_AIFF
+#define PA_CHANNEL_MAP_ALSA PA_CHANNEL_MAP_ALSA
+#define PA_CHANNEL_MAP_AUX PA_CHANNEL_MAP_AUX
+#define PA_CHANNEL_MAP_WAVEEX PA_CHANNEL_MAP_WAVEEX
+#define PA_CHANNEL_MAP_OSS PA_CHANNEL_MAP_OSS
+#define PA_CHANNEL_MAP_DEF_MAX PA_CHANNEL_MAP_DEF_MAX
+#define PA_CHANNEL_MAP_DEFAULT PA_CHANNEL_MAP_DEFAULT
+/** \endcond */
+
+/** A channel map which can be used to attach labels to specific
+ * channels of a stream. These values are relevant for conversion and
+ * mixing of streams */
+
+/** Initialize the specified channel map and return a pointer to
+ * it. The channel map will have a defined state but
+ * pa_channel_map_valid() will fail for it. */
+typedef pa_channel_map* (__cdecl *pa_channel_map_init)(pa_channel_map *m);
+
+/** Initialize the specified channel map for monaural audio and return a pointer to it */
+typedef pa_channel_map* (__cdecl *pa_channel_map_init_mono)(pa_channel_map *m);
+
+/** Initialize the specified channel map for stereophonic audio and return a pointer to it */
+typedef pa_channel_map* (__cdecl *pa_channel_map_init_stereo)(pa_channel_map *m);
+
+/** Initialize the specified channel map for the specified number of
+ * channels using default labels and return a pointer to it. This call
+ * will fail (return NULL) if there is no default channel map known for this
+ * specific number of channels and mapping. */
+typedef pa_channel_map* (__cdecl *pa_channel_map_init_auto)(pa_channel_map *m, unsigned channels, pa_channel_map_def_t def);
+
