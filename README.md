@@ -3,7 +3,7 @@ PulseAudio output for foobar2000 using the native TCP protocol, for use in Wine.
 
 ## Advantages
 Foobar works very well in Wine, but Wine's default Pulseaudio output has some disadvantages:
-- While the Wine application is performing IO-heavy tasks, such as writing tags in foobar, the
+- Some people report that when performing IO-heavy tasks, such as writing tags in foobar, the
 buffer seems to be liable to underrun, causing audio dropouts,
 - Existing output components will automatically resample audio to the reported output sample
 rate of the playback device. Pulseaudio supports changing the device sample rate to match the
