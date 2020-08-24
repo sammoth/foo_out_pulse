@@ -11,6 +11,12 @@ currently playing client even when running in shared mode using the `avoid-resam
 so this isn't optimal
 - foobar will have a generic device icon in the system mixer (the true tragedy)
 
+## Shortcomings
+Currently
+- Doesn't support foobar's volume control (don't hurt your ears)
+- Doesn't support authentication via cookies
+- Only connects to localhost
+- Doesn't support connecting via Unix socket like normal programs, unless you build libpulse-0.dll using the libpulse-wine repo. Currently not recommended as in my testing it was unstable and it's not clear that there is any purpose to using it.
 
 ## Setup
 At the moment this component tries to connect to 127.0.0.1 using Pulse's native TCP protocol.
