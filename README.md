@@ -16,6 +16,7 @@ Currently
 - Doesn't support foobar's volume control (don't hurt your ears)
 - Doesn't support authentication via cookies
 - Only connects to localhost
+- Doesn't properly pass through channel mappings from source files
 - Doesn't support connecting via Unix socket like normal programs, unless you build libpulse-0.dll using the libpulse-wine repo. Currently not recommended as in my testing it was unstable and it's not clear that there is any real benefit to using it.
 
 ## Setup
