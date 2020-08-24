@@ -9,7 +9,7 @@ buffer seems to be liable to underrun, causing audio dropouts,
 rate of the playback device. Pulseaudio supports changing the device sample rate to match the
 currently playing client even when running in shared mode using the `avoid-resampling` option,
 so this isn't optimal
-- foobar will have a generic device icon in the system mixer
+- foobar will have a generic device icon in the system mixer (the true tragedy)
 
 
 ## Setup
