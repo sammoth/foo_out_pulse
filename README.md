@@ -16,7 +16,7 @@ Currently
 - Doesn't support foobar's volume control (don't hurt your ears)
 - Doesn't support authentication via cookies
 - Only connects to localhost
-- Doesn't support connecting via Unix socket like normal programs, unless you build libpulse-0.dll using the libpulse-wine repo. Currently not recommended as in my testing it was unstable and it's not clear that there is any purpose to using it.
+- Doesn't support connecting via Unix socket like normal programs, unless you build libpulse-0.dll using the libpulse-wine repo. Currently not recommended as in my testing it was unstable and it's not clear that there is any real benefit to using it.
 
 ## Setup
 At the moment this component tries to connect to 127.0.0.1 using Pulse's native TCP protocol.
@@ -27,7 +27,7 @@ First you have to enable the module for this protocol for the Pulse daemon by ed
 
 Understand the security implications of this before making this change.
 
-To minimise the chance of audio dropouts, it is better to disable the option 'Enable smooth seeking, pause and volume changes' in the Output settings of foobar (since version 1.6). When fading is enabled, foobar requests a very small buffer from Pulseaudio as the fading is implemented before the audio is sent to the output, so this is necessary to make seeking seem instant. While this is not a problem under Windows, under Wine it seems problematic. (In the future, smooth seeking can be implemented separately within this component by rewriting the Pulseaudio buffer, allowing it to remain large enough.)
+To minimise the chance of audio dropouts, it is better to disable the option 'Enable smooth seeking, pause and volume changes' in the Output settings of foobar (since version 1.6). When fading is enabled, foobar requests a very small buffer from Pulseaudio as the fading is implemented before the audio is sent to the output, so this is necessary to make seeking seem instant. While this is not a problem under Windows, under Wine it seems problematic. (In the future, smooth seeking can be implemented separately within this component by rewriting the Pulseaudio buffer on seek, allowing the buffer to always remain large enough.)
 
 For the icon to appear in the mixer, you will need to place a png of foobar's icon in, for example, `~/.icons/hicolor/256x256/apps/`
 
