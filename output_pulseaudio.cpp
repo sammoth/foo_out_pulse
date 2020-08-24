@@ -112,12 +112,12 @@ namespace {
 		}
 		~output_pulse()
 		{
+			trigger_update.release();
+
 			if (failed)
 				return;
 
 			g_pa_threaded_mainloop_lock(mainloop);
-
-			trigger_update.release();
 
 			close_stream();
 
