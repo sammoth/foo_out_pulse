@@ -11,8 +11,8 @@ currently playing client even when running in shared mode using the `avoid-resam
 so this isn't optimal
 - foobar will have a generic device icon in the system mixer (the true tragedy)
 
-## Shortcomings
-Currently
+## Todo
+Currently it
 - Doesn't support foobar's volume control (don't hurt your ears)
 - Doesn't support authentication via cookies
 - Only connects to localhost
