@@ -114,19 +114,16 @@ namespace {
 		{
 			trigger_update.release();
 
-			if (failed)
-				return;
+				g_pa_threaded_mainloop_lock(mainloop);
 
-			g_pa_threaded_mainloop_lock(mainloop);
+				close_stream();
 
-			close_stream();
-
-			g_pa_context_disconnect(context);
-			g_pa_context_set_state_callback(context, NULL, NULL);
-			g_pa_context_unref(context);
-			g_pa_threaded_mainloop_unlock(mainloop);
-			g_pa_threaded_mainloop_stop(mainloop);
-			g_pa_threaded_mainloop_free(mainloop);
+				g_pa_context_disconnect(context);
+				g_pa_context_set_state_callback(context, NULL, NULL);
+				g_pa_context_unref(context);
+				g_pa_threaded_mainloop_unlock(mainloop);
+				g_pa_threaded_mainloop_stop(mainloop);
+				g_pa_threaded_mainloop_free(mainloop);
 		}
 
 		void pause(bool p_state)
@@ -333,7 +330,7 @@ namespace {
 				console::error("Pulseaudio: connection failed");
 				output->failed = true;
 				fb2k::inMainThread([]() {
-						playback_control::get()->stop();
+					playback_control::get()->stop();
 					});
 			case PA_CONTEXT_READY:
 			case PA_CONTEXT_TERMINATED:
