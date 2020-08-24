@@ -1,5 +1,5 @@
 # foo_out_pulse
-PulseAudio output for foobar2000 using the native TCP protocol, for use in Wine.
+Event-based PulseAudio output for foobar2000 using the native TCP protocol, for use in Wine.
 
 ## Advantages
 Foobar works very well in Wine, but Wine's default Pulseaudio output has some disadvantages:
