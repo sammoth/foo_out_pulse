@@ -241,7 +241,7 @@ namespace {
 			if (m_incoming_spec.is_valid()) {
 				ret += audio_math::samples_to_time((m_incoming.get_size() - m_incoming_ptr) / m_incoming_spec.m_channels, m_incoming_spec.m_sample_rate);
 			}
-			if (m_active_spec.is_valid()) {
+			if (m_active_spec.is_valid() && !drained) {
 				pa_usec_t latency;
 				if (stream != NULL && g_pa_stream_get_latency(stream, &latency, NULL) > -1)
 				{
@@ -442,8 +442,7 @@ namespace {
 			const pa_channel_map* map_ptr = g_pa_channel_map_init_auto(&map, ss.channels, PA_CHANNEL_MAP_WAVEEX);
 
 			pa_stream_flags_t flags =
-				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE
-					| PA_STREAM_NOT_MONOTONIC);
+				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
