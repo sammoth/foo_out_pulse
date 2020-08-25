@@ -64,7 +64,6 @@ namespace {
 	class output_pulse : public output_v4
 	{
 	public:
-		bool failed = false;
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
 			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false)
 		{
@@ -340,7 +339,6 @@ namespace {
 			{
 			case PA_CONTEXT_FAILED:
 				console::error("Pulseaudio: connection failed");
-				output->failed = true;
 				fb2k::inMainThread([]() {
 					playback_control::get()->stop();
 					});
