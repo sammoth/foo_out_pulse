@@ -70,7 +70,8 @@ namespace {
 		{
 			if (!g_pa_is_loaded)
 			{
-				load_pulse_dll();
+				console::error("Pulseaudio: dll could not be loaded");
+				throw exception_output_invalidated();
 			}
 
 			mainloop = g_pa_threaded_mainloop_new();
@@ -114,16 +115,16 @@ namespace {
 		{
 			trigger_update.release();
 
-				g_pa_threaded_mainloop_lock(mainloop);
+			g_pa_threaded_mainloop_lock(mainloop);
 
-				close_stream();
+			close_stream();
 
-				g_pa_context_disconnect(context);
-				g_pa_context_set_state_callback(context, NULL, NULL);
-				g_pa_context_unref(context);
-				g_pa_threaded_mainloop_unlock(mainloop);
-				g_pa_threaded_mainloop_stop(mainloop);
-				g_pa_threaded_mainloop_free(mainloop);
+			g_pa_context_disconnect(context);
+			g_pa_context_set_state_callback(context, NULL, NULL);
+			g_pa_context_unref(context);
+			g_pa_threaded_mainloop_unlock(mainloop);
+			g_pa_threaded_mainloop_stop(mainloop);
+			g_pa_threaded_mainloop_free(mainloop);
 		}
 
 		void pause(bool p_state)
@@ -271,7 +272,18 @@ namespace {
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
 			const GUID device = { 0x8bf1c19, 0x5b9d, 0x4992, { 0x76, 0x18, 0x13, 0x8b, 0xa2, 0x1, 0xd7, 0xa6 } };
-			p_callback.on_device(device, "localhost", 9);
+			if (g_pa_is_loaded || load_pulse_dll())
+			{
+				if (is_using_winelib)
+				{
+					p_callback.on_device(device, "native", 6);
+				}
+				else
+				{
+					p_callback.on_device(device, "localhost", 9);
+				}
+			}
+
 		}
 		static GUID g_get_guid() {
 			static const GUID guid = { 0xfe94df9, 0xc8e2, 0x40a1, { 0x40, 0xa1, 0xb1, 0x2a, 0x4a, 0x6c, 0xe4, 0x9e } };
@@ -488,7 +500,7 @@ namespace {
 			output->trigger_update.set_state(true);
 		}
 
-		void load_pulse_dll()
+		static bool load_pulse_dll()
 		{
 			HMODULE libpulse;
 			pfc::string_formatter path = core_api::get_my_full_path();
@@ -503,7 +515,7 @@ namespace {
 				std::stringstream error;
 				error << "Could not load libpulse-0.dll: error code " << GetLastError();
 				console::error(error.str().c_str());
-				throw exception_output_invalidated();
+				return false;
 			}
 
 			g_pa_strerror = (pa_strerror)GetProcAddress(libpulse, "pa_strerror");
@@ -618,10 +630,11 @@ namespace {
 				g_pa_usec_to_bytes == NULL)
 			{
 				console::error("Could not load libpulse-0.dll");
-				throw exception_output_invalidated();
+				return false;
 			}
 
 			g_pa_is_loaded = true;
+			return true;
 		}
 	};
 
