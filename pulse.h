@@ -463,6 +463,7 @@ typedef int (__cdecl *pa_stream_get_latency)(pa_stream *s, pa_usec_t *r_usec, in
 typedef pa_operation* (__cdecl *pa_stream_update_timing_info)(pa_stream *p, pa_stream_success_cb_t cb, void *userdata);
 typedef const pa_timing_info* (__cdecl *pa_stream_get_timing_info)(pa_stream *s);
 typedef const pa_sample_spec* (__cdecl *pa_stream_get_sample_spec)(pa_stream *s);
+typedef pa_operation* (__cdecl* pa_stream_trigger)(pa_stream* p, pa_stream_success_cb_t cb, void* userdata);
 typedef pa_operation* (__cdecl *pa_stream_update_sample_rate)(pa_stream *s, uint32_t rate, pa_stream_success_cb_t cb, void *userdata);
 typedef pa_usec_t (__cdecl *pa_bytes_to_usec)(uint64_t length, const pa_sample_spec *spec);
 typedef size_t (__cdecl *pa_usec_to_bytes)(pa_usec_t t, const pa_sample_spec *spec);

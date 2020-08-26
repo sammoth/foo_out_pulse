@@ -41,6 +41,7 @@ namespace {
 	static pa_stream_get_sample_spec g_pa_stream_get_sample_spec;
 	static pa_stream_get_latency g_pa_stream_get_latency;
 	static pa_stream_get_timing_info g_pa_stream_get_timing_info;
+	static pa_stream_trigger g_pa_stream_trigger;
 	static pa_stream_update_timing_info g_pa_stream_update_timing_info;
 	static pa_proplist_new g_pa_proplist_new;
 	static pa_proplist_free g_pa_proplist_free;
@@ -208,7 +209,7 @@ namespace {
 			if (draining)
 				return;
 
-			if (m_active_spec.is_valid())
+			if (stream != NULL)
 			{
 				g_pa_threaded_mainloop_lock(mainloop);
 				draining = true;
@@ -223,6 +224,11 @@ namespace {
 					// nothing to drain
 					draining = false;
 					drained = true;
+				}
+				op = g_pa_stream_trigger(stream, NULL, NULL);
+				if (op != NULL)
+				{
+					g_pa_operation_unref(op);
 				}
 				g_pa_threaded_mainloop_unlock(mainloop);
 			}
@@ -549,6 +555,7 @@ namespace {
 			g_pa_stream_get_sample_spec = (pa_stream_get_sample_spec)GetProcAddress(libpulse, "pa_stream_get_sample_spec");
 			g_pa_stream_get_latency = (pa_stream_get_latency)GetProcAddress(libpulse, "pa_stream_get_latency");
 			g_pa_stream_get_timing_info = (pa_stream_get_timing_info)GetProcAddress(libpulse, "pa_stream_get_timing_info");
+			g_pa_stream_trigger = (pa_stream_trigger)GetProcAddress(libpulse, "pa_stream_trigger");
 			g_pa_stream_update_timing_info = (pa_stream_update_timing_info)GetProcAddress(libpulse, "pa_stream_update_timing_info");
 
 			g_pa_proplist_new = (pa_proplist_new)GetProcAddress(libpulse, "pa_proplist_new");
@@ -609,6 +616,7 @@ namespace {
 				g_pa_stream_get_sample_spec == NULL ||
 				g_pa_stream_get_latency == NULL ||
 				g_pa_stream_get_timing_info == NULL ||
+				g_pa_stream_trigger == NULL ||
 				g_pa_stream_update_timing_info == NULL ||
 				g_pa_proplist_new == NULL ||
 				g_pa_proplist_free == NULL ||
