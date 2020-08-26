@@ -461,8 +461,8 @@ namespace {
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
 			attr.minreq = (uint32_t)-1;
-			attr.prebuf = (uint32_t)-1;
-			attr.tlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
+			attr.tlength = attr.maxlength;
+			attr.prebuf = min(attr.tlength, m_incoming_spec.time_to_samples(0.05) * m_incoming_spec.m_channels * 4);
 
 			g_pa_threaded_mainloop_lock(mainloop);
 
