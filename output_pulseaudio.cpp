@@ -62,6 +62,15 @@ namespace {
 	static bool g_pa_is_loaded = false;
 	static bool is_using_winelib = false;
 
+	static const GUID guid_cfg_pulseaudio_branch =
+	{ 0x61979096, 0x1158, 0x4860, { 0xb0, 0xcc, 0x6f, 0x53, 0xf, 0x35, 0xaf, 0x26 } };
+	static const GUID guid_cfg_minimum_buffer =
+	{ 0xe0023922, 0xe6c8, 0x486a, { 0xba, 0x5d, 0xaa, 0x40, 0x1f, 0xf2, 0x2, 0xea } };
+
+	static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio Output", guid_cfg_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
+	static advconfig_integer_factory cfg_pulseaudio_minimum_buffer("Minimum buffer size (milliseconds)", guid_cfg_minimum_buffer, guid_cfg_pulseaudio_branch, 0, 50, 0, 10000, 0);
+
+
 	class output_pulse : public output_v4
 	{
 	public:
@@ -446,7 +455,8 @@ namespace {
 				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
-			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
+			double pa_buffer_length = max(buffer_length, cfg_pulseaudio_minimum_buffer.get() * 0.001);
+			attr.maxlength = ceil(m_incoming_spec.time_to_samples(pa_buffer_length) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
 			attr.minreq = (uint32_t)-1;
 			attr.tlength = attr.maxlength;
