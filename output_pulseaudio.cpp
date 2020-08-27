@@ -106,21 +106,23 @@ namespace {
 			lookback_ = pfc::min_t(max_size_, lookback_ + nbytes);
 		}
 
-		void read_back(size_t distance, void* out)
+		size_t read_back(size_t distance, void* out)
 		{
 			std::lock_guard<std::mutex> lock(buffer_mutex_);
-			pfc::dynamic_assert(distance <= lookback_);
-			if (head_ < distance)
+			size_t to_read = min(distance, lookback_);
+			if (head_ < to_read)
 			{
-				memcpy(out, buf_.get() + max_size_ - (distance - head_), distance - head_);
-				memcpy((BYTE*)out + distance - head_, buf_.get(), head_);
+				memcpy(out, buf_.get() + max_size_ - (to_read - head_), to_read - head_);
+				memcpy((BYTE*)out + to_read - head_, buf_.get(), head_);
 			}
 			else
 			{
-				memcpy(out, buf_.get() + head_ - distance, distance);
+				memcpy(out, buf_.get() + head_ - to_read, to_read);
 			}
 			head_ = 0;
 			lookback_ = 0;
+
+			return to_read;
 		}
 
 		void reset(size_t size)
@@ -589,11 +591,10 @@ namespace {
 			int64_t buffered_bytes = (buffer_attr->maxlength + write_index - read_index) % buffer_attr->maxlength;
 
 			int64_t rewind_bytes = max(buffered_bytes - offset_bytes, 0);
-			int64_t rewind_samples = rewind_bytes / sizeof(audio_sample);
-			std::unique_ptr<audio_sample> rewind_data = std::unique_ptr<audio_sample>(new audio_sample[rewind_samples]);
-			rewind_buffer.read_back(rewind_bytes, rewind_data.get());
+			std::unique_ptr<audio_sample> rewind_data = std::unique_ptr<audio_sample>(new audio_sample[rewind_bytes / 4]);
+			rewind_bytes = rewind_buffer.read_back(rewind_bytes, rewind_data.get());
 
-			int64_t fade_samples = min(rewind_samples / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
+			int64_t fade_samples = min(rewind_bytes / 4 / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
 			fade_section(rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
 
 			int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
