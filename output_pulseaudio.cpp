@@ -123,6 +123,9 @@ namespace {
 			head_ = 0;
 			lookback_ = 0;
 
+			if (to_read == 0)
+				console::error("Pulseaudio: No buffer available for fade");
+
 			return to_read;
 		}
 
@@ -597,19 +600,27 @@ namespace {
 			int64_t rewind_bytes = max(buffered_bytes - offset_bytes, 0);
 			rewind_bytes = rewind_buffer.read_back(rewind_bytes);
 
-			std::shared_ptr<BYTE> rewind_data = rewind_buffer.out_buf_;
-			int64_t fade_samples = min(rewind_bytes / 4 / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
-			fade_section((audio_sample*)rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
-
-			int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
-			if (g_pa_stream_write(stream, (audio_sample*)rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
+			if (rewind_bytes > 0)
 			{
-				console::error("Pulseaudio: error writing to stream");
+				std::shared_ptr<BYTE> rewind_data = rewind_buffer.out_buf_;
+				int64_t fade_samples = min(rewind_bytes / 4 / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
+				fade_section((audio_sample*)rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
+
+				int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
+				if (g_pa_stream_write(stream, (audio_sample*)rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
+				{
+					console::error("Pulseaudio: error writing to stream");
+				}
+				else
+				{
+					rewind_buffer.queue((audio_sample*)rewind_data.get(), write_bytes);
+				}
 			}
 			else
 			{
-				rewind_buffer.queue((audio_sample*)rewind_data.get(), write_bytes);
+				next_write_relative = true;
 			}
+
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
 
