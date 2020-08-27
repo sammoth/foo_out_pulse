@@ -66,7 +66,8 @@ namespace {
 	{
 	public:
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
-			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false)
+			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false),
+			rewind(false)
 		{
 			if (!g_pa_is_loaded)
 			{
@@ -148,26 +149,7 @@ namespace {
 		void flush() {
 			m_incoming_ptr = 0;
 			m_incoming.set_size(0);
-			if (stream == NULL)
-				return;
-
-			g_pa_threaded_mainloop_lock(mainloop);
-			pa_operation* op = g_pa_stream_cork(stream, 1, NULL, NULL);
-			if (op != NULL)
-			{
-				g_pa_operation_unref(op);
-			}
-			op = g_pa_stream_flush(stream, NULL, NULL);
-			if (op != NULL)
-			{
-				g_pa_operation_unref(op);
-			}
-			op = g_pa_stream_cork(stream, 0, NULL, NULL);
-			if (op != NULL)
-			{
-				g_pa_operation_unref(op);
-			}
-			g_pa_threaded_mainloop_unlock(mainloop);
+			rewind = true;
 		}
 
 		void flush_changing_track() {
@@ -320,6 +302,7 @@ namespace {
 		bool progressing;
 		bool draining;
 		bool drained;
+		bool rewind;
 
 		pfc::event trigger_update;
 
@@ -412,14 +395,19 @@ namespace {
 			g_pa_threaded_mainloop_lock(mainloop);
 			size_t cw_samples = g_pa_stream_writable_size(stream) / sizeof(audio_sample);
 			size_t delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw_samples);
-			if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, 0, PA_SEEK_RELATIVE) < 0)
+			if (delta > 0)
 			{
-				console::error("Pulseaudio: error writing to stream");
-				return 0;
-			}
-			else
-			{
-				m_incoming_ptr += delta;
+				pa_seek_mode seek_mode = rewind ? PA_SEEK_RELATIVE_ON_READ : PA_SEEK_RELATIVE;
+				if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, 0, seek_mode) < 0)
+				{
+					console::error("Pulseaudio: error writing to stream");
+					return 0;
+				}
+				else
+				{
+					rewind = false;
+					m_incoming_ptr += delta;
+				}
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 
