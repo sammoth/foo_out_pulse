@@ -159,8 +159,8 @@ namespace {
 
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
 			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false),
-			cfg_seek_fade_out(min(cfg_pulseaudio_seek_fade_out.get(), 1000*p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
-			cfg_track_fade_out(min(cfg_pulseaudio_track_fade_out.get(), 1000*p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
+			cfg_seek_fade_out(min(cfg_pulseaudio_seek_fade_out.get(), 1000 * p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
+			cfg_track_fade_out(min(cfg_pulseaudio_track_fade_out.get(), 1000 * p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
 			fade_in_next_ms(0), active_fade_in(), rewind_buffer(), rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 || cfg_pulseaudio_track_fade_out.get() > 0),
 			next_write_relative(false)
 		{
@@ -410,6 +410,9 @@ namespace {
 
 	private:
 
+		const double offset = 0.05;
+		const double prebuf = 0.05;
+
 		pa_context* context = NULL;
 		pa_threaded_mainloop* mainloop = NULL;
 		pa_stream* stream = NULL;
@@ -419,7 +422,6 @@ namespace {
 		t_samplespec m_incoming_spec, m_active_spec;
 
 		double buffer_length;
-
 
 		bool progressing;
 		bool draining;
@@ -579,21 +581,29 @@ namespace {
 			wait_for_op(op);
 
 			const pa_timing_info* timing_info = g_pa_stream_get_timing_info(stream);
-			size_t rewind_bytes = timing_info->write_index - timing_info->read_index;
-			size_t rewind_samples = rewind_bytes / sizeof(audio_sample);
+			const pa_buffer_attr* buffer_attr = g_pa_stream_get_buffer_attr(stream);
+			int64_t read_index = timing_info->read_index;
+			int64_t write_index = timing_info->write_index;
+
+			int64_t offset_bytes = m_active_spec.time_to_samples(offset) * m_active_spec.m_channels * 4;
+			int64_t buffered_bytes = (buffer_attr->maxlength + write_index - read_index) % buffer_attr->maxlength;
+
+			int64_t rewind_bytes = max(buffered_bytes - offset_bytes, 0);
+			int64_t rewind_samples = rewind_bytes / sizeof(audio_sample);
 			std::unique_ptr<audio_sample> rewind_data = std::unique_ptr<audio_sample>(new audio_sample[rewind_samples]);
 			rewind_buffer.read_back(rewind_bytes, rewind_data.get());
 
-			size_t fade_samples = min(rewind_samples / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
+			int64_t fade_samples = min(rewind_samples / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
 			fade_section(rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
 
-			if (g_pa_stream_write(stream, rewind_data.get(), fade_samples * m_active_spec.m_channels * sizeof(audio_sample), NULL, 0, PA_SEEK_RELATIVE_ON_READ) < 0)
+			int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
+			if (g_pa_stream_write(stream, rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
 			{
 				console::error("Pulseaudio: error writing to stream");
 			}
 			else
 			{
-				rewind_buffer.queue(rewind_data.get(), fade_samples * m_active_spec.m_channels * sizeof(audio_sample));
+				rewind_buffer.queue(rewind_data.get(), write_bytes);
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
@@ -645,11 +655,11 @@ namespace {
 				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
-			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
+			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length + offset) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
 			attr.minreq = (uint32_t)-1;
 			attr.tlength = attr.maxlength;
-			attr.prebuf = min(attr.tlength, m_incoming_spec.time_to_samples(0.05) * m_incoming_spec.m_channels * 4);
+			attr.prebuf = min(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
 
 			if (rewind_active)
 				rewind_buffer.reset(attr.maxlength);
