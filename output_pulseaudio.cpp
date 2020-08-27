@@ -87,7 +87,8 @@ namespace {
 	public:
 		lookback_buffer() :
 			max_size_(0),
-			buf_(std::unique_ptr<BYTE>(new BYTE[0])),
+			buf_(),
+			out_buf_(),
 			lookback_(0)
 		{
 		};
@@ -106,18 +107,18 @@ namespace {
 			lookback_ = pfc::min_t(max_size_, lookback_ + nbytes);
 		}
 
-		size_t read_back(size_t distance, void* out)
+		size_t read_back(size_t distance)
 		{
 			std::lock_guard<std::mutex> lock(buffer_mutex_);
 			size_t to_read = min(distance, lookback_);
 			if (head_ < to_read)
 			{
-				memcpy(out, buf_.get() + max_size_ - (to_read - head_), to_read - head_);
-				memcpy((BYTE*)out + to_read - head_, buf_.get(), head_);
+				memcpy(out_buf_.get(), buf_.get() + max_size_ - (to_read - head_), to_read - head_);
+				memcpy(out_buf_.get() + to_read - head_, buf_.get(), head_);
 			}
 			else
 			{
-				memcpy(out, buf_.get() + head_ - to_read, to_read);
+				memcpy(out_buf_.get(), buf_.get() + head_ - to_read, to_read);
 			}
 			head_ = 0;
 			lookback_ = 0;
@@ -131,6 +132,7 @@ namespace {
 			head_ = 0;
 			lookback_ = 0;
 			buf_ = std::unique_ptr<BYTE>(new BYTE[size]);
+			out_buf_ = std::shared_ptr<BYTE>(new BYTE[size]);
 			max_size_ = size;
 		}
 
@@ -140,6 +142,8 @@ namespace {
 			head_ = 0;
 			lookback_ = 0;
 		}
+
+		std::shared_ptr<BYTE> out_buf_;
 
 	private:
 		std::mutex buffer_mutex_;
@@ -591,20 +595,20 @@ namespace {
 			int64_t buffered_bytes = (buffer_attr->maxlength + write_index - read_index) % buffer_attr->maxlength;
 
 			int64_t rewind_bytes = max(buffered_bytes - offset_bytes, 0);
-			std::unique_ptr<audio_sample> rewind_data = std::unique_ptr<audio_sample>(new audio_sample[rewind_bytes / 4]);
-			rewind_bytes = rewind_buffer.read_back(rewind_bytes, rewind_data.get());
+			rewind_bytes = rewind_buffer.read_back(rewind_bytes);
 
+			std::shared_ptr<BYTE> rewind_data = rewind_buffer.out_buf_;
 			int64_t fade_samples = min(rewind_bytes / 4 / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
-			fade_section(rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
+			fade_section((audio_sample*)rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
 
 			int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
-			if (g_pa_stream_write(stream, rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
+			if (g_pa_stream_write(stream, (audio_sample*)rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
 			{
 				console::error("Pulseaudio: error writing to stream");
 			}
 			else
 			{
-				rewind_buffer.queue(rewind_data.get(), write_bytes);
+				rewind_buffer.queue((audio_sample*)rewind_data.get(), write_bytes);
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
 		}
