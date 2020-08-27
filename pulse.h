@@ -452,6 +452,7 @@ typedef int (__cdecl *pa_stream_write)(
         pa_seek_mode_t seek      );
 typedef int (__cdecl *pa_stream_drop)(pa_stream *p);
 typedef size_t (__cdecl *pa_stream_writable_size)(pa_stream *p);
+typedef const pa_buffer_attr* (__cdecl *pa_stream_get_buffer_attr)(pa_stream *s);
 typedef pa_operation* (__cdecl *pa_stream_drain)(pa_stream *s, pa_stream_success_cb_t cb, void *userdata);
 typedef void (__cdecl *pa_stream_set_state_callback)(pa_stream *s, pa_stream_notify_cb_t cb, void *userdata);
 typedef void (__cdecl *pa_stream_set_write_callback)(pa_stream *p, pa_stream_request_cb_t cb, void *userdata);
@@ -543,3 +544,4 @@ typedef enum pa_channel_map_def {
 #define PA_CHANNEL_MAP_DEF_MAX PA_CHANNEL_MAP_DEF_MAX
 #define PA_CHANNEL_MAP_DEFAULT PA_CHANNEL_MAP_DEFAULT
 typedef pa_channel_map* (__cdecl *pa_channel_map_init_auto)(pa_channel_map *m, unsigned channels, pa_channel_map_def_t def);
+typedef pa_operation_state_t (__cdecl *pa_operation_get_state)(pa_operation *o);

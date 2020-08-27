@@ -43,6 +43,7 @@ namespace {
 	static pa_stream_get_timing_info g_pa_stream_get_timing_info;
 	static pa_stream_trigger g_pa_stream_trigger;
 	static pa_stream_update_timing_info g_pa_stream_update_timing_info;
+	static pa_stream_get_buffer_attr g_pa_stream_get_buffer_attr;
 	static pa_proplist_new g_pa_proplist_new;
 	static pa_proplist_free g_pa_proplist_free;
 	static pa_proplist_set g_pa_proplist_set;
@@ -56,6 +57,7 @@ namespace {
 	static pa_context_set_state_callback g_pa_context_set_state_callback;
 	static pa_context_set_event_callback g_pa_context_set_event_callback;
 	static pa_operation_unref g_pa_operation_unref;
+	static pa_operation_get_state g_pa_operation_get_state;
 	static pa_bytes_to_usec g_pa_bytes_to_usec;
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
 	static pa_channel_map_init_auto g_pa_channel_map_init_auto;
@@ -64,19 +66,103 @@ namespace {
 
 	static const GUID guid_cfg_pulseaudio_branch =
 	{ 0x61979096, 0x1158, 0x4860, { 0xb0, 0xcc, 0x6f, 0x53, 0xf, 0x35, 0xaf, 0x26 } };
-	static const GUID guid_cfg_minimum_buffer =
-	{ 0xe0023922, 0xe6c8, 0x486a, { 0xba, 0x5d, 0xaa, 0x40, 0x1f, 0xf2, 0x2, 0xea } };
+	static const GUID guid_cfg_pulseaudio_fade_out_seek =
+	{ 0x319d2507, 0xe2aa, 0x40e2, { 0xa1, 0xec, 0x4e, 0x94, 0xf1, 0xdd, 0x12, 0x8a } };
+	static const GUID guid_cfg_pulseaudio_fade_in_seek =
+	{ 0x90ae1a07, 0xcd2b, 0x481c, { 0xb2, 0x6a, 0xf7, 0x36, 0x83, 0xec, 0xf6, 0x40 } };
+	static const GUID guid_cfg_pulseaudio_fade_out_track =
+	{ 0xa1d249b5, 0x8e8c, 0x422b, { 0xbb, 0x61, 0x31, 0x43, 0x5d, 0x59, 0x10, 0x23 } };
+	static const GUID guid_cfg_pulseaudio_fade_in_track =
+	{ 0x6fb3670, 0x4e7d, 0x4601, { 0x83, 0xa6, 0xed, 0x44, 0x3e, 0xb1, 0xe1, 0x7 } };
+
 
 	static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio Output", guid_cfg_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
-	static advconfig_integer_factory cfg_pulseaudio_minimum_buffer("Minimum buffer size (milliseconds)", guid_cfg_minimum_buffer, guid_cfg_pulseaudio_branch, 0, 50, 0, 10000, 0);
+	static advconfig_integer_factory cfg_pulseaudio_seek_fade_out("Fade out on seek (milliseconds)", guid_cfg_pulseaudio_fade_out_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+	static advconfig_integer_factory cfg_pulseaudio_seek_fade_in("Fade in on seek (milliseconds)", guid_cfg_pulseaudio_fade_in_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+	static advconfig_integer_factory cfg_pulseaudio_track_fade_out("Fade out on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+	static advconfig_integer_factory cfg_pulseaudio_track_fade_in("Fade in on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_in_track, guid_cfg_pulseaudio_branch, 0, 0, 0, 1000, 0);
+
+
+	class lookback_buffer {
+	public:
+		lookback_buffer() :
+			max_size_(0),
+			buf_(std::unique_ptr<BYTE>(new BYTE[0])),
+			lookback_(0)
+		{
+		};
+
+		void queue(void* in, size_t nbytes)
+		{
+			std::lock_guard<std::mutex> lock(buffer_mutex_);
+			pfc::dynamic_assert(nbytes <= max_size_);
+			size_t endspace = max_size_ - head_;
+			memcpy(buf_.get() + head_, in, pfc::min_t(nbytes, endspace));
+			if (endspace < nbytes)
+			{
+				memcpy(buf_.get(), (BYTE*)in + endspace, nbytes - endspace);
+			}
+			head_ = (head_ + nbytes) % max_size_;
+			lookback_ = pfc::min_t(max_size_, lookback_ + nbytes);
+		}
+
+		void read_back(size_t distance, void* out)
+		{
+			std::lock_guard<std::mutex> lock(buffer_mutex_);
+			pfc::dynamic_assert(distance <= lookback_);
+			if (head_ < distance)
+			{
+				memcpy(out, buf_.get() + max_size_ - (distance - head_), distance - head_);
+				memcpy((BYTE*)out + distance - head_, buf_.get(), head_);
+			}
+			else
+			{
+				memcpy(out, buf_.get() + head_ - distance, distance);
+			}
+			head_ = 0;
+			lookback_ = 0;
+		}
+
+		void reset(size_t size)
+		{
+			std::lock_guard<std::mutex> lock(buffer_mutex_);
+			head_ = 0;
+			lookback_ = 0;
+			buf_ = std::unique_ptr<BYTE>(new BYTE[size]);
+			max_size_ = size;
+		}
+
+		void reset()
+		{
+			std::lock_guard<std::mutex> lock(buffer_mutex_);
+			head_ = 0;
+			lookback_ = 0;
+		}
+
+	private:
+		std::mutex buffer_mutex_;
+		std::unique_ptr<BYTE> buf_;
+		size_t head_ = 0;
+		size_t lookback_ = 0;
+		size_t max_size_;
+	};
 
 
 	class output_pulse : public output_v4
 	{
 	public:
+		typedef struct fade_in {
+			bool active = false;
+			size_t total_samples;
+			size_t progress;
+		} fade;
+
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
 			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false),
-			rewind(false)
+			cfg_seek_fade_out(min(cfg_pulseaudio_seek_fade_out.get(), 1000*p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
+			cfg_track_fade_out(min(cfg_pulseaudio_track_fade_out.get(), 1000*p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
+			fade_in_next_ms(0), active_fade_in(), rewind_buffer(), rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 || cfg_pulseaudio_track_fade_out.get() > 0),
+			next_write_relative(false)
 		{
 			if (!g_pa_is_loaded)
 			{
@@ -158,11 +244,19 @@ namespace {
 		void flush() {
 			m_incoming_ptr = 0;
 			m_incoming.set_size(0);
-			rewind = true;
+
+			write_fade_out(cfg_seek_fade_out);
+			active_fade_in = fade();
+			fade_in_next_ms = cfg_seek_fade_in;
 		}
 
 		void flush_changing_track() {
-			flush();
+			m_incoming_ptr = 0;
+			m_incoming.set_size(0);
+
+			write_fade_out(cfg_track_fade_out);
+			active_fade_in = fade();
+			fade_in_next_ms = cfg_track_fade_in;
 		}
 
 		void update(bool& p_ready) {
@@ -254,6 +348,24 @@ namespace {
 			size_t length = p_chunk.get_used_size();
 			m_incoming.set_data_fromptr(p_chunk.get_data(), length);
 			m_incoming_ptr = 0;
+
+			if (fade_in_next_ms > 0)
+			{
+				active_fade_in = fade();
+				active_fade_in.active = true;
+				active_fade_in.total_samples = m_incoming_spec.time_to_samples(0.001 * fade_in_next_ms);
+				active_fade_in.progress = 0;
+				fade_in_next_ms = 0;
+			}
+
+			if (active_fade_in.active)
+			{
+				size_t fade_samples = min(m_incoming.get_size() / m_incoming_spec.m_channels, (active_fade_in.total_samples - active_fade_in.progress));
+				fade_section(m_incoming.get_ptr(), fade_samples, active_fade_in.total_samples, active_fade_in.progress, m_incoming_spec.m_channels, true);
+				active_fade_in.progress += fade_samples;
+				if (active_fade_in.progress == active_fade_in.total_samples)
+					active_fade_in.active = false;
+			}
 		}
 
 		bool is_progressing()
@@ -290,7 +402,7 @@ namespace {
 		static bool g_needs_dither_config() { return false; }
 		static bool g_needs_device_list_prefixes() { return true; }
 		static bool g_supports_multiple_streams() { return false; }
-		static bool g_is_high_latency() { return false; }
+		static bool g_is_high_latency() { return true; }
 		static uint32_t g_extra_flags() { return 0; }
 		static void g_advanced_settings_popup(HWND p_parent, POINT p_menupoint) {}
 		static const char* g_get_name() { return "Pulseaudio"; }
@@ -308,10 +420,20 @@ namespace {
 
 		double buffer_length;
 
+
 		bool progressing;
 		bool draining;
 		bool drained;
-		bool rewind;
+
+		bool rewind_active;
+		lookback_buffer rewind_buffer;
+		const size_t cfg_seek_fade_in;
+		const size_t cfg_seek_fade_out;
+		const size_t cfg_track_fade_in;
+		const size_t cfg_track_fade_out;
+		size_t fade_in_next_ms;
+		fade active_fade_in;
+		bool next_write_relative;
 
 		pfc::event trigger_update;
 
@@ -404,9 +526,11 @@ namespace {
 			g_pa_threaded_mainloop_lock(mainloop);
 			size_t cw_samples = g_pa_stream_writable_size(stream) / sizeof(audio_sample);
 			size_t delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw_samples);
+
 			if (delta > 0)
 			{
-				pa_seek_mode seek_mode = rewind ? PA_SEEK_RELATIVE_ON_READ : PA_SEEK_RELATIVE;
+				pa_seek_mode seek_mode = next_write_relative ? PA_SEEK_RELATIVE_ON_READ : PA_SEEK_RELATIVE;
+				next_write_relative = false;
 				if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, 0, seek_mode) < 0)
 				{
 					console::error("Pulseaudio: error writing to stream");
@@ -414,13 +538,79 @@ namespace {
 				}
 				else
 				{
-					rewind = false;
+					if (rewind_active)
+						rewind_buffer.queue(m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample));
+
 					m_incoming_ptr += delta;
 				}
 			}
 			g_pa_threaded_mainloop_unlock(mainloop);
-
 			return (cw_samples - delta) / m_incoming_spec.m_channels;
+		}
+
+		void fade_section(audio_sample* data, size_t num_samples_to_write, size_t total_fade_samples, size_t start_at_sample, size_t num_channels, bool fade_in)
+		{
+			if (fade_in)
+			{
+				for (int s = 0; s < num_samples_to_write; s++)
+				{
+					audio_math::scale(data + (s * num_channels), num_channels, data + (s * num_channels), (1.0f * (s + start_at_sample)) / (1.0f * total_fade_samples));
+				}
+			}
+			else
+			{
+				for (int s = 0; s < num_samples_to_write; s++)
+				{
+					audio_math::scale(data + (s * num_channels), num_channels, data + (s * num_channels), (1.0f * (total_fade_samples - (start_at_sample + s))) / (1.0f * total_fade_samples));
+				}
+			}
+		}
+
+		void write_fade_out(size_t fade_ms)
+		{
+			if (stream == NULL || fade_ms == 0 || !rewind_active)
+			{
+				next_write_relative = true;
+				return;
+			}
+
+			g_pa_threaded_mainloop_lock(mainloop);
+			pa_operation* op = g_pa_stream_update_timing_info(stream, stream_success_cb, mainloop);
+			wait_for_op(op);
+
+			const pa_timing_info* timing_info = g_pa_stream_get_timing_info(stream);
+			size_t rewind_bytes = timing_info->write_index - timing_info->read_index;
+			size_t rewind_samples = rewind_bytes / sizeof(audio_sample);
+			std::unique_ptr<audio_sample> rewind_data = std::unique_ptr<audio_sample>(new audio_sample[rewind_samples]);
+			rewind_buffer.read_back(rewind_bytes, rewind_data.get());
+
+			size_t fade_samples = min(rewind_samples / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
+			fade_section(rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
+
+			if (g_pa_stream_write(stream, rewind_data.get(), fade_samples * m_active_spec.m_channels * sizeof(audio_sample), NULL, 0, PA_SEEK_RELATIVE_ON_READ) < 0)
+			{
+				console::error("Pulseaudio: error writing to stream");
+			}
+			else
+			{
+				rewind_buffer.queue(rewind_data.get(), fade_samples * m_active_spec.m_channels * sizeof(audio_sample));
+			}
+			g_pa_threaded_mainloop_unlock(mainloop);
+		}
+
+		static void stream_success_cb(pa_stream* s, int success, void* userdata)
+		{
+			g_pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
+		}
+
+		void wait_for_op(pa_operation* op)
+		{
+			if (op != NULL)
+			{
+				while (g_pa_operation_get_state(op) == PA_OPERATION_RUNNING)
+					g_pa_threaded_mainloop_wait(mainloop);
+				g_pa_operation_unref(op);
+			}
 		}
 
 		void close_stream()
@@ -455,12 +645,14 @@ namespace {
 				(pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE);
 
 			struct pa_buffer_attr attr;
-			double pa_buffer_length = max(buffer_length, cfg_pulseaudio_minimum_buffer.get() * 0.001);
-			attr.maxlength = ceil(m_incoming_spec.time_to_samples(pa_buffer_length) * m_incoming_spec.m_channels * 4);
+			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
 			attr.minreq = (uint32_t)-1;
 			attr.tlength = attr.maxlength;
 			attr.prebuf = min(attr.tlength, m_incoming_spec.time_to_samples(0.05) * m_incoming_spec.m_channels * 4);
+
+			if (rewind_active)
+				rewind_buffer.reset(attr.maxlength);
 
 			g_pa_threaded_mainloop_lock(mainloop);
 
@@ -555,6 +747,7 @@ namespace {
 			g_pa_stream_get_timing_info = (pa_stream_get_timing_info)GetProcAddress(libpulse, "pa_stream_get_timing_info");
 			g_pa_stream_trigger = (pa_stream_trigger)GetProcAddress(libpulse, "pa_stream_trigger");
 			g_pa_stream_update_timing_info = (pa_stream_update_timing_info)GetProcAddress(libpulse, "pa_stream_update_timing_info");
+			g_pa_stream_get_buffer_attr = (pa_stream_get_buffer_attr)GetProcAddress(libpulse, "pa_stream_get_buffer_attr");
 
 			g_pa_proplist_new = (pa_proplist_new)GetProcAddress(libpulse, "pa_proplist_new");
 			g_pa_proplist_free = (pa_proplist_free)GetProcAddress(libpulse, "pa_proplist_free");
@@ -573,6 +766,7 @@ namespace {
 			g_pa_channel_map_init_auto = (pa_channel_map_init_auto)GetProcAddress(libpulse, "pa_channel_map_init_auto");
 
 			g_pa_operation_unref = (pa_operation_unref)GetProcAddress(libpulse, "pa_operation_unref");
+			g_pa_operation_get_state = (pa_operation_get_state)GetProcAddress(libpulse, "pa_operation_get_state");
 
 			g_pa_bytes_to_usec = (pa_bytes_to_usec)GetProcAddress(libpulse, "pa_bytes_to_usec");
 			g_pa_usec_to_bytes = (pa_usec_to_bytes)GetProcAddress(libpulse, "pa_usec_to_bytes");
@@ -616,6 +810,7 @@ namespace {
 				g_pa_stream_get_timing_info == NULL ||
 				g_pa_stream_trigger == NULL ||
 				g_pa_stream_update_timing_info == NULL ||
+				g_pa_stream_get_buffer_attr == NULL ||
 				g_pa_proplist_new == NULL ||
 				g_pa_proplist_free == NULL ||
 				g_pa_proplist_set == NULL ||
@@ -630,6 +825,7 @@ namespace {
 				g_pa_context_set_event_callback == NULL ||
 				g_pa_channel_map_init_auto == NULL ||
 				g_pa_operation_unref == NULL ||
+				g_pa_operation_get_state == NULL ||
 				g_pa_bytes_to_usec == NULL ||
 				g_pa_usec_to_bytes == NULL)
 			{
