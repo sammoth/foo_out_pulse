@@ -614,9 +614,18 @@ namespace {
 
 			if (delta > 0)
 			{
-				pa_seek_mode seek_mode = next_write_relative ? PA_SEEK_RELATIVE_ON_READ : PA_SEEK_RELATIVE;
-				next_write_relative = false;
-				if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, 0, seek_mode) < 0)
+				pa_seek_mode seek_mode = PA_SEEK_RELATIVE;
+				int64_t write_index = 0;
+
+				if (next_write_relative)
+				{
+					next_write_relative = false;
+					seek_mode = PA_SEEK_ABSOLUTE;
+					const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
+					write_index = info->read_index - (info->read_index % (4 * m_active_spec.m_channels));
+				}
+
+				if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, write_index, seek_mode) < 0)
 				{
 					console::error("Pulseaudio: error writing to stream");
 					return 0;
