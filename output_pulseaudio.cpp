@@ -35,6 +35,7 @@ namespace {
 	static pa_stream_set_started_callback g_pa_stream_set_started_callback;
 	static pa_stream_set_underflow_callback g_pa_stream_set_underflow_callback;
 	static pa_stream_cork g_pa_stream_cork;
+	static pa_stream_is_corked g_pa_stream_is_corked;
 	static pa_stream_flush g_pa_stream_flush;
 	static pa_stream_update_sample_rate g_pa_stream_update_sample_rate;
 	static pa_stream_get_state g_pa_stream_get_state;
@@ -659,6 +660,19 @@ namespace {
 			}
 
 			g_pa_threaded_mainloop_lock(mainloop);
+
+			if (g_pa_stream_is_corked(stream))
+			{
+				pa_operation* op = g_pa_stream_flush(stream, NULL, NULL);
+				if (op != NULL)
+				{
+					g_pa_operation_unref(op);
+				}
+
+				g_pa_threaded_mainloop_unlock(mainloop);
+				return;
+			}
+
 			pa_operation* op = g_pa_stream_update_timing_info(stream, stream_success_cb, mainloop);
 			wait_for_op(op);
 
@@ -841,6 +855,7 @@ namespace {
 			g_pa_stream_set_started_callback = (pa_stream_set_started_callback)GetProcAddress(libpulse, "pa_stream_set_started_callback");
 			g_pa_stream_set_underflow_callback = (pa_stream_set_underflow_callback)GetProcAddress(libpulse, "pa_stream_set_underflow_callback");
 			g_pa_stream_cork = (pa_stream_cork)GetProcAddress(libpulse, "pa_stream_cork");
+			g_pa_stream_is_corked = (pa_stream_is_corked)GetProcAddress(libpulse, "pa_stream_is_corked");
 			g_pa_stream_flush = (pa_stream_flush)GetProcAddress(libpulse, "pa_stream_flush");
 			g_pa_stream_update_sample_rate = (pa_stream_update_sample_rate)GetProcAddress(libpulse, "pa_stream_update_sample_rate");
 			g_pa_stream_get_state = (pa_stream_get_state)GetProcAddress(libpulse, "pa_stream_get_state");
@@ -916,6 +931,7 @@ namespace {
 				g_pa_stream_set_started_callback == NULL ||
 				g_pa_stream_set_underflow_callback == NULL ||
 				g_pa_stream_cork == NULL ||
+				g_pa_stream_is_corked == NULL ||
 				g_pa_stream_flush == NULL ||
 				g_pa_stream_update_sample_rate == NULL ||
 				g_pa_stream_get_state == NULL ||
