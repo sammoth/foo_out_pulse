@@ -61,6 +61,17 @@ namespace {
 	static pa_bytes_to_usec g_pa_bytes_to_usec;
 	static pa_usec_to_bytes g_pa_usec_to_bytes;
 	static pa_channel_map_init_auto g_pa_channel_map_init_auto;
+	static pa_stream_get_index g_pa_stream_get_index;
+	static pa_sw_volume_from_dB g_pa_sw_volume_from_dB;
+	static pa_sw_volume_to_dB g_pa_sw_volume_to_dB;
+	static pa_cvolume_valid g_pa_cvolume_valid;
+	static pa_cvolume_equal g_pa_cvolume_equal;
+	static pa_context_set_sink_input_volume g_pa_context_set_sink_input_volume;
+	static pa_cvolume_init g_pa_cvolume_init;
+	static pa_cvolume_set g_pa_cvolume_set;
+	static pa_context_get_sink_input_info g_pa_context_get_sink_input_info;
+	static pa_context_subscribe g_pa_context_subscribe;
+	static pa_context_set_subscribe_callback g_pa_context_set_subscribe_callback;
 	static bool g_pa_is_loaded = false;
 	static bool is_using_winelib = false;
 
@@ -171,7 +182,7 @@ namespace {
 			cfg_seek_fade_out(min(cfg_pulseaudio_seek_fade_out.get(), 1000 * p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
 			cfg_track_fade_out(min(cfg_pulseaudio_track_fade_out.get(), 1000 * p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
 			fade_in_next_ms(0), active_fade_in(), rewind_buffer(), rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 || cfg_pulseaudio_track_fade_out.get() > 0),
-			next_write_relative(false)
+			next_write_relative(false), volume(0)
 		{
 			if (!load_pulse_dll())
 			{
@@ -197,7 +208,6 @@ namespace {
 			if (proplist != NULL) g_pa_proplist_free(proplist);
 
 			g_pa_context_set_state_callback(context, context_state_cb, this);
-
 			const char* server = is_using_winelib ? NULL : "127.0.0.1";
 			if (g_pa_context_connect(context, server, (pa_context_flags_t)0, NULL) < 0
 				|| context_wait(context, mainloop))
@@ -210,6 +220,13 @@ namespace {
 				console::error("Pulseaudio: failed to connect");
 				throw exception_output_invalidated();
 			}
+
+			pa_operation* op = g_pa_context_subscribe(context, PA_SUBSCRIPTION_MASK_SINK_INPUT, NULL, NULL);
+			if (op != NULL)
+			{
+				g_pa_operation_unref(op);
+			}
+			g_pa_context_set_subscribe_callback(context, context_subscribe_cb, this);
 
 			g_pa_threaded_mainloop_unlock(mainloop);
 
@@ -225,6 +242,7 @@ namespace {
 
 			g_pa_context_disconnect(context);
 			g_pa_context_set_state_callback(context, NULL, NULL);
+			g_pa_context_set_subscribe_callback(context, NULL, NULL);
 			g_pa_context_unref(context);
 			g_pa_threaded_mainloop_unlock(mainloop);
 			g_pa_threaded_mainloop_stop(mainloop);
@@ -247,6 +265,27 @@ namespace {
 
 		void volume_set(double p_val)
 		{
+			if (stream == NULL)
+				return;
+
+			pa_volume_t new_volume = g_pa_sw_volume_from_dB(p_val);
+			if (new_volume != volume)
+			{
+				volume = new_volume;
+				uint32_t index = g_pa_stream_get_index(stream);
+				pa_cvolume cvolume;
+				g_pa_cvolume_init(&cvolume);
+				cvolume.channels = m_active_spec.m_channels;
+				g_pa_cvolume_set(&cvolume, m_active_spec.m_channels, volume);
+
+				g_pa_threaded_mainloop_lock(mainloop);
+				pa_operation* op = g_pa_context_set_sink_input_volume(context, index, &cvolume, NULL, NULL);
+				if (op != NULL)
+				{
+					g_pa_operation_unref(op);
+				}
+				g_pa_threaded_mainloop_unlock(mainloop);
+			}
 		}
 
 		void flush() {
@@ -431,6 +470,8 @@ namespace {
 
 		double buffer_length;
 
+		pa_volume_t volume;
+
 		bool progressing;
 		bool draining;
 		bool drained;
@@ -459,6 +500,38 @@ namespace {
 				g_pa_threaded_mainloop_wait(ml);
 			}
 			return 0;
+		}
+
+		static void context_subscribe_cb(pa_context* c, pa_subscription_event_type_t t,
+			uint32_t idx, void* userdata)
+		{
+			if ((pa_subscription_event_type)(t & PA_SUBSCRIPTION_EVENT_SINK_INPUT) == PA_SUBSCRIPTION_EVENT_SINK_INPUT)
+			{
+				output_pulse* output = (output_pulse*)userdata;
+				if (output->stream == NULL)
+					return;
+
+
+				if (g_pa_stream_get_index(output->stream) == idx)
+				{
+					g_pa_context_get_sink_input_info(output->context, idx, sink_input_info_cb, output);
+				}
+			}
+		}
+
+		static void sink_input_info_cb(pa_context* c, const pa_sink_input_info* i, int eol, void* userdata)
+		{
+			output_pulse* output = (output_pulse*)userdata;
+			if (i == NULL || output == NULL)
+				return;
+
+			if (g_pa_cvolume_valid(&i->volume) && output->volume != i->volume.values[0])
+			{
+				float volume_db = g_pa_sw_volume_to_dB(i->volume.values[0]);
+				fb2k::inMainThread([volume_db]() {
+					playback_control::get()->set_volume(volume_db);
+					});
+			}
 		}
 
 		static void context_state_cb(pa_context* ctx, void* userdata)
@@ -799,6 +872,18 @@ namespace {
 			g_pa_bytes_to_usec = (pa_bytes_to_usec)GetProcAddress(libpulse, "pa_bytes_to_usec");
 			g_pa_usec_to_bytes = (pa_usec_to_bytes)GetProcAddress(libpulse, "pa_usec_to_bytes");
 
+			g_pa_stream_get_index = (pa_stream_get_index)GetProcAddress(libpulse, "pa_stream_get_index");
+			g_pa_sw_volume_from_dB = (pa_sw_volume_from_dB)GetProcAddress(libpulse, "pa_sw_volume_from_dB");
+			g_pa_sw_volume_to_dB = (pa_sw_volume_to_dB)GetProcAddress(libpulse, "pa_sw_volume_to_dB");
+			g_pa_context_set_sink_input_volume = (pa_context_set_sink_input_volume)GetProcAddress(libpulse, "pa_context_set_sink_input_volume");
+			g_pa_cvolume_init = (pa_cvolume_init)GetProcAddress(libpulse, "pa_cvolume_init");
+			g_pa_cvolume_set = (pa_cvolume_set)GetProcAddress(libpulse, "pa_cvolume_set");
+			g_pa_cvolume_valid = (pa_cvolume_valid)GetProcAddress(libpulse, "pa_cvolume_valid");
+			g_pa_cvolume_equal = (pa_cvolume_equal)GetProcAddress(libpulse, "pa_cvolume_equal");
+			g_pa_context_get_sink_input_info = (pa_context_get_sink_input_info)GetProcAddress(libpulse, "pa_context_get_sink_input_info");
+			g_pa_context_subscribe = (pa_context_subscribe)GetProcAddress(libpulse, "pa_context_subscribe");
+			g_pa_context_set_subscribe_callback = (pa_context_set_subscribe_callback)GetProcAddress(libpulse, "pa_context_set_subscribe_callback");
+
 			void* winelib = GetProcAddress(libpulse, "foo_out_pulse_winelib_dll");
 
 			is_using_winelib = winelib != NULL;
@@ -855,6 +940,17 @@ namespace {
 				g_pa_operation_unref == NULL ||
 				g_pa_operation_get_state == NULL ||
 				g_pa_bytes_to_usec == NULL ||
+				g_pa_stream_get_index == NULL ||
+				g_pa_sw_volume_from_dB == NULL ||
+				g_pa_sw_volume_to_dB == NULL ||
+				g_pa_context_set_sink_input_volume == NULL ||
+				g_pa_cvolume_init == NULL ||
+				g_pa_cvolume_set == NULL ||
+				g_pa_cvolume_valid == NULL ||
+				g_pa_cvolume_equal == NULL ||
+				g_pa_context_get_sink_input_info == NULL ||
+				g_pa_context_subscribe == NULL ||
+				g_pa_context_set_subscribe_callback == NULL ||
 				g_pa_usec_to_bytes == NULL)
 			{
 				console::error("Could not load libpulse-0.dll");

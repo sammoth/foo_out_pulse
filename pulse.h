@@ -545,3 +545,121 @@ typedef enum pa_channel_map_def {
 #define PA_CHANNEL_MAP_DEFAULT PA_CHANNEL_MAP_DEFAULT
 typedef pa_channel_map* (__cdecl *pa_channel_map_init_auto)(pa_channel_map *m, unsigned channels, pa_channel_map_def_t def);
 typedef pa_operation_state_t (__cdecl *pa_operation_get_state)(pa_operation *o);
+
+typedef uint32_t (__cdecl *pa_stream_get_index)(pa_stream *s); 
+typedef pa_volume_t (__cdecl *pa_sw_volume_from_dB)(double f);
+typedef double(__cdecl* pa_sw_volume_to_dB)(pa_volume_t v);
+typedef pa_operation* (__cdecl *pa_context_set_sink_input_volume)(pa_context *c, uint32_t idx, const pa_cvolume *volume, pa_context_success_cb_t cb, void *userdata);
+typedef pa_cvolume* (__cdecl *pa_cvolume_init)(pa_cvolume *a);
+typedef pa_cvolume* (__cdecl *pa_cvolume_set)(pa_cvolume *a, unsigned channels, pa_volume_t v);
+typedef void (__cdecl *pa_context_set_event_callback)(pa_context *p, pa_context_event_cb_t cb, void *userdata);
+
+typedef int(__cdecl* pa_cvolume_valid)(const pa_cvolume* v);
+typedef int(__cdecl* pa_cvolume_equal)(const pa_cvolume* a, const pa_cvolume* b);
+
+typedef enum pa_encoding {
+    PA_ENCODING_ANY,
+    PA_ENCODING_PCM,
+    PA_ENCODING_AC3_IEC61937,
+    PA_ENCODING_EAC3_IEC61937,
+    PA_ENCODING_MPEG_IEC61937,
+    PA_ENCODING_DTS_IEC61937,
+    PA_ENCODING_MAX,
+    PA_ENCODING_INVALID = -1,
+} pa_encoding_t;
+
+typedef struct pa_format_info {
+    pa_encoding_t encoding;
+    pa_proplist *plist;
+} pa_format_info;
+
+typedef struct pa_sink_input_info {
+    uint32_t index;
+    const char *name;
+    uint32_t owner_module;
+    uint32_t client;
+    uint32_t sink;
+    pa_sample_spec sample_spec;
+    pa_channel_map channel_map;
+    pa_cvolume volume;
+    pa_usec_t buffer_usec;
+    pa_usec_t sink_usec;
+    const char *resample_method;
+    const char *driver;
+    int mute;
+    pa_proplist *proplist;
+    int corked;
+    int has_volume;
+    int volume_writable;
+    pa_format_info *format;
+} pa_sink_input_info;
+
+typedef void (*pa_sink_input_info_cb_t) (pa_context *c, const pa_sink_input_info *i, int eol, void *userdata);
+typedef pa_operation* (__cdecl *pa_context_get_sink_input_info)(pa_context *c, uint32_t idx, pa_sink_input_info_cb_t cb, void *userdata);
+
+typedef enum pa_subscription_mask {
+    PA_SUBSCRIPTION_MASK_NULL = 0x0000U,
+    PA_SUBSCRIPTION_MASK_SINK = 0x0001U,
+    PA_SUBSCRIPTION_MASK_SOURCE = 0x0002U,
+    PA_SUBSCRIPTION_MASK_SINK_INPUT = 0x0004U,
+    PA_SUBSCRIPTION_MASK_SOURCE_OUTPUT = 0x0008U,
+    PA_SUBSCRIPTION_MASK_MODULE = 0x0010U,
+    PA_SUBSCRIPTION_MASK_CLIENT = 0x0020U,
+    PA_SUBSCRIPTION_MASK_SAMPLE_CACHE = 0x0040U,
+    PA_SUBSCRIPTION_MASK_SERVER = 0x0080U,
+    PA_SUBSCRIPTION_MASK_AUTOLOAD = 0x0100U,
+    PA_SUBSCRIPTION_MASK_CARD = 0x0200U,
+    PA_SUBSCRIPTION_MASK_ALL = 0x02ffU
+} pa_subscription_mask_t;
+
+typedef enum pa_subscription_event_type {
+    PA_SUBSCRIPTION_EVENT_SINK = 0x0000U,
+    PA_SUBSCRIPTION_EVENT_SOURCE = 0x0001U,
+    PA_SUBSCRIPTION_EVENT_SINK_INPUT = 0x0002U,
+    PA_SUBSCRIPTION_EVENT_SOURCE_OUTPUT = 0x0003U,
+    PA_SUBSCRIPTION_EVENT_MODULE = 0x0004U,
+    PA_SUBSCRIPTION_EVENT_CLIENT = 0x0005U,
+    PA_SUBSCRIPTION_EVENT_SAMPLE_CACHE = 0x0006U,
+    PA_SUBSCRIPTION_EVENT_SERVER = 0x0007U,
+    PA_SUBSCRIPTION_EVENT_AUTOLOAD = 0x0008U,
+    PA_SUBSCRIPTION_EVENT_CARD = 0x0009U,
+    PA_SUBSCRIPTION_EVENT_FACILITY_MASK = 0x000FU,
+    PA_SUBSCRIPTION_EVENT_NEW = 0x0000U,
+    PA_SUBSCRIPTION_EVENT_CHANGE = 0x0010U,
+    PA_SUBSCRIPTION_EVENT_REMOVE = 0x0020U,
+    PA_SUBSCRIPTION_EVENT_TYPE_MASK = 0x0030U
+} pa_subscription_event_type_t;
+
+#define pa_subscription_match_flags(m, t) (!!((m) & (1 << ((t) & PA_SUBSCRIPTION_EVENT_FACILITY_MASK))))
+
+#define PA_SUBSCRIPTION_MASK_NULL PA_SUBSCRIPTION_MASK_NULL
+#define PA_SUBSCRIPTION_MASK_SINK PA_SUBSCRIPTION_MASK_SINK
+#define PA_SUBSCRIPTION_MASK_SOURCE PA_SUBSCRIPTION_MASK_SOURCE
+#define PA_SUBSCRIPTION_MASK_SINK_INPUT PA_SUBSCRIPTION_MASK_SINK_INPUT
+#define PA_SUBSCRIPTION_MASK_SOURCE_OUTPUT PA_SUBSCRIPTION_MASK_SOURCE_OUTPUT
+#define PA_SUBSCRIPTION_MASK_MODULE PA_SUBSCRIPTION_MASK_MODULE
+#define PA_SUBSCRIPTION_MASK_CLIENT PA_SUBSCRIPTION_MASK_CLIENT
+#define PA_SUBSCRIPTION_MASK_SAMPLE_CACHE PA_SUBSCRIPTION_MASK_SAMPLE_CACHE
+#define PA_SUBSCRIPTION_MASK_SERVER PA_SUBSCRIPTION_MASK_SERVER
+#define PA_SUBSCRIPTION_MASK_AUTOLOAD PA_SUBSCRIPTION_MASK_AUTOLOAD
+#define PA_SUBSCRIPTION_MASK_CARD PA_SUBSCRIPTION_MASK_CARD
+#define PA_SUBSCRIPTION_MASK_ALL PA_SUBSCRIPTION_MASK_ALL
+#define PA_SUBSCRIPTION_EVENT_SINK PA_SUBSCRIPTION_EVENT_SINK
+#define PA_SUBSCRIPTION_EVENT_SOURCE PA_SUBSCRIPTION_EVENT_SOURCE
+#define PA_SUBSCRIPTION_EVENT_SINK_INPUT PA_SUBSCRIPTION_EVENT_SINK_INPUT
+#define PA_SUBSCRIPTION_EVENT_SOURCE_OUTPUT PA_SUBSCRIPTION_EVENT_SOURCE_OUTPUT
+#define PA_SUBSCRIPTION_EVENT_MODULE PA_SUBSCRIPTION_EVENT_MODULE
+#define PA_SUBSCRIPTION_EVENT_CLIENT PA_SUBSCRIPTION_EVENT_CLIENT
+#define PA_SUBSCRIPTION_EVENT_SAMPLE_CACHE PA_SUBSCRIPTION_EVENT_SAMPLE_CACHE
+#define PA_SUBSCRIPTION_EVENT_SERVER PA_SUBSCRIPTION_EVENT_SERVER
+#define PA_SUBSCRIPTION_EVENT_AUTOLOAD PA_SUBSCRIPTION_EVENT_AUTOLOAD
+#define PA_SUBSCRIPTION_EVENT_CARD PA_SUBSCRIPTION_EVENT_CARD
+#define PA_SUBSCRIPTION_EVENT_FACILITY_MASK PA_SUBSCRIPTION_EVENT_FACILITY_MASK
+#define PA_SUBSCRIPTION_EVENT_NEW PA_SUBSCRIPTION_EVENT_NEW
+#define PA_SUBSCRIPTION_EVENT_CHANGE PA_SUBSCRIPTION_EVENT_CHANGE
+#define PA_SUBSCRIPTION_EVENT_REMOVE PA_SUBSCRIPTION_EVENT_REMOVE
+#define PA_SUBSCRIPTION_EVENT_TYPE_MASK PA_SUBSCRIPTION_EVENT_TYPE_MASK
+
+typedef void (*pa_context_subscribe_cb_t)(pa_context *c, pa_subscription_event_type_t t, uint32_t idx, void *userdata);
+typedef pa_operation* (__cdecl *pa_context_subscribe)(pa_context *c, pa_subscription_mask_t m, pa_context_success_cb_t cb, void *userdata);
+typedef void (__cdecl *pa_context_set_subscribe_callback)(pa_context *c, pa_context_subscribe_cb_t cb, void *userdata);
