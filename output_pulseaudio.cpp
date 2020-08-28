@@ -315,8 +315,9 @@ namespace {
 
 			if (m_incoming_spec != m_active_spec)
 			{
-				if (drained)
+				if (drained || next_write_relative)
 				{
+					next_write_relative = false;
 					drained = false;
 					open_incoming_spec();
 				}
