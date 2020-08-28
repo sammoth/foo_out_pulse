@@ -15,7 +15,7 @@ For the icon to appear in the mixer, you will need to place a png of foobar's ic
 ## Advantages
 Foobar works very well in Wine, but Wine's default Pulseaudio output has some disadvantages. Compared to using the standard output, this component
 - May be less liable to cause audio dropouts when performing IO-intensive tasks such as tag writing,
-- Has a custom fading implementation for seek/track change that doesn't require reducing Pulseaudio's buffer length to work (configure in Advanced Preferences -> Playback -> Pulseaudio output),
+- Has a custom fading implementation to prevent pops on seek/track change, that doesn't require reducing Pulseaudio's buffer length to work (configure in Advanced Preferences -> Playback -> Pulseaudio output),
 - Doesn't resample unnecessarily, making the most of Pulseaudio's `avoid-resampling` option,
 - Can show foobar's icon in the system mixer,
 - Integrates with Pulseaudio's volume control so there is no delay in volume adjustment.
