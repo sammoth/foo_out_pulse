@@ -76,7 +76,7 @@ namespace {
 	{ 0x6fb3670, 0x4e7d, 0x4601, { 0x83, 0xa6, 0xed, 0x44, 0x3e, 0xb1, 0xe1, 0x7 } };
 
 
-	static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio Output", guid_cfg_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
+	static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio output", guid_cfg_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
 	static advconfig_integer_factory cfg_pulseaudio_seek_fade_out("Fade out on seek (milliseconds)", guid_cfg_pulseaudio_fade_out_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_seek_fade_in("Fade in on seek (milliseconds)", guid_cfg_pulseaudio_fade_in_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_track_fade_out("Fade out on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
@@ -173,9 +173,8 @@ namespace {
 			fade_in_next_ms(0), active_fade_in(), rewind_buffer(), rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 || cfg_pulseaudio_track_fade_out.get() > 0),
 			next_write_relative(false)
 		{
-			if (!g_pa_is_loaded)
+			if (!load_pulse_dll())
 			{
-				console::error("Pulseaudio: dll could not be loaded");
 				throw exception_output_invalidated();
 			}
 
@@ -389,7 +388,7 @@ namespace {
 
 		static void g_enum_devices(output_device_enum_callback& p_callback) {
 			const GUID device = { 0x8bf1c19, 0x5b9d, 0x4992, { 0x76, 0x18, 0x13, 0x8b, 0xa2, 0x1, 0xd7, 0xa6 } };
-			if (g_pa_is_loaded || load_pulse_dll())
+			if (load_pulse_dll())
 			{
 				if (is_using_winelib)
 				{
@@ -722,6 +721,9 @@ namespace {
 
 		static bool load_pulse_dll()
 		{
+			if (g_pa_is_loaded)
+				return true;
+
 			HMODULE libpulse;
 			pfc::string_formatter path = core_api::get_my_full_path();
 			path.truncate(path.scan_filename());
