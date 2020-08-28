@@ -1,4 +1,4 @@
 #include "stdafx.h"
-DECLARE_COMPONENT_VERSION("Pulseaudio Output", "0.1-beta", "Pulseaudio network output");
+DECLARE_COMPONENT_VERSION("Pulseaudio Output", "0.2-beta", "Pulseaudio network output");
 VALIDATE_COMPONENT_FILENAME("foo_out_pulse.dll");
 
