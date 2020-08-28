@@ -20,11 +20,11 @@ Foobar works very well in Wine, but Wine's default Pulseaudio output has some di
 - Can show foobar's icon in the system mixer,
 - Integrates with Pulseaudio's volume control so there is no delay in volume adjustment.
 
+<img src="screenshot.png" width="660">
+
 ## Todo
 Currently it
 - Doesn't support authentication via cookies,
 - Only connects to localhost,
 - Probably doesn't properly pass through channel mappings from source files correctly,
 - Doesn't support connecting via Unix socket like normal programs (unless you build libpulse-0.dll using the libpulse-wine repo - currently not recommended as in my testing it was unstable and it's not clear that there is any real benefit to using it).
-
-<img src="screenshot.png" width="660">
