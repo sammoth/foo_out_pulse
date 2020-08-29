@@ -8,9 +8,9 @@ First you have to enable the module for this protocol for the Pulse daemon by ed
 
 `load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1`
 
-Make sure the Pulseaudio daemon is actually running, as it cannot be automatically activated over TCP.
-
 NB: Do understand the security implications of this before making this change.
+
+Make sure the Pulseaudio daemon is actually running, as it cannot be automatically activated over TCP.
 
 For the icon to appear in the mixer, you will need to place a png of foobar's icon in, for example, `~/.icons/hicolor/256x256/apps/`
 
