@@ -135,9 +135,6 @@ namespace {
 			head_ = 0;
 			lookback_ = 0;
 
-			if (to_read == 0)
-				console::error("Pulseaudio: No buffer available for fade");
-
 			return to_read;
 		}
 
@@ -591,7 +588,6 @@ namespace {
 		{
 			output_pulse* output = (output_pulse*)userdata;
 			output->progressing = false;
-			console::info("Pulseaudio: buffer underrun");
 			output->trigger_update.set_state(true);
 		}
 
