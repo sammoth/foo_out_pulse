@@ -20,7 +20,7 @@ Foobar works very well in Wine, but Wine's default Pulseaudio output has some di
 - Has a custom fading implementation to prevent pops on seek/track change, that doesn't require reducing Pulseaudio's buffer length to work (configure in Advanced Preferences -> Playback -> Pulseaudio output),
 - Doesn't resample unnecessarily, making the most of Pulseaudio's `avoid-resampling` option,
 - Can show foobar's icon in the system mixer,
-- Integrates with Pulseaudio's volume control so there is no delay in volume adjustment.
+- Integrates with Pulseaudio's volume control.
 
 <img src="screenshot.png" width="660">
 
