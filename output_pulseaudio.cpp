@@ -184,15 +184,18 @@ namespace {
 		{
 			if (!load_pulse_dll())
 			{
-				throw exception_output_invalidated();
+				stop();
+				return;
 			}
 
 			mainloop = g_pa_threaded_mainloop_new();
 			if (g_pa_threaded_mainloop_start(mainloop) < 0)
 			{
 				g_pa_threaded_mainloop_free(mainloop);
+				mainloop = NULL;
 				console::error("Pulseaudio: failed to start playback thread");
-				throw exception_output_invalidated();
+				stop();
+				return;
 			}
 			pa_proplist* proplist = g_pa_proplist_new();
 			g_pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "foobar2000");
@@ -211,12 +214,15 @@ namespace {
 				|| context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
+				context = NULL;
 				g_pa_threaded_mainloop_unlock(mainloop);
 				g_pa_threaded_mainloop_stop(mainloop);
 				g_pa_threaded_mainloop_free(mainloop);
+				mainloop = NULL;
 
 				console::error("Pulseaudio: failed to connect");
-				throw exception_output_invalidated();
+				stop();
+				return;
 			}
 
 			pa_operation* op = g_pa_context_subscribe(context, PA_SUBSCRIPTION_MASK_SINK_INPUT, NULL, NULL);
@@ -232,19 +238,11 @@ namespace {
 		}
 		~output_pulse()
 		{
-			trigger_update.release();
+			if (context != NULL)
+				g_pa_context_unref(context);
 
-			g_pa_threaded_mainloop_lock(mainloop);
-
-			close_stream();
-
-			g_pa_context_disconnect(context);
-			g_pa_context_set_state_callback(context, NULL, NULL);
-			g_pa_context_set_subscribe_callback(context, NULL, NULL);
-			g_pa_context_unref(context);
-			g_pa_threaded_mainloop_unlock(mainloop);
-			g_pa_threaded_mainloop_stop(mainloop);
-			g_pa_threaded_mainloop_free(mainloop);
+			if (mainloop != NULL)
+				g_pa_threaded_mainloop_free(mainloop);
 		}
 
 		void pause(bool p_state)
@@ -533,6 +531,13 @@ namespace {
 			}
 		}
 
+		static void stop()
+		{
+			fb2k::inMainThread([]() {
+				playback_control::get()->stop();
+				});
+		}
+
 		static void context_state_cb(pa_context* ctx, void* userdata)
 		{
 			output_pulse* output = (output_pulse*)userdata;
@@ -541,9 +546,7 @@ namespace {
 			{
 			case PA_CONTEXT_FAILED:
 				console::error("Pulseaudio: connection failed");
-				fb2k::inMainThread([]() {
-					playback_control::get()->stop();
-					});
+				stop();
 			case PA_CONTEXT_READY:
 			case PA_CONTEXT_TERMINATED:
 				g_pa_threaded_mainloop_signal(output->mainloop, 0);
@@ -781,7 +784,8 @@ namespace {
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
 				console::error("Pulseaudio: failed to create stream");
-				throw exception_output_invalidated();
+				stop();
+				return;
 			}
 
 			g_pa_stream_set_state_callback(stream, stream_state_cb, mainloop);
@@ -794,7 +798,8 @@ namespace {
 			{
 				g_pa_threaded_mainloop_unlock(mainloop);
 				console::error("Pulseaudio: failed to connect stream");
-				throw exception_output_invalidated();
+				stop();
+				return;
 			}
 
 			m_active_spec = m_incoming_spec;
