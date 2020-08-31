@@ -833,9 +833,13 @@ namespace {
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length + offset) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
-			attr.minreq = attr.maxlength;
+			attr.minreq = pfc::min_t(attr.maxlength, (uint32_t)ceil(m_incoming_spec.time_to_samples(0.1) * m_incoming_spec.m_channels * 4));
 			attr.tlength = attr.maxlength;
 			attr.prebuf = pfc::min_t(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
+
+			std::stringstream s;
+			s << "Pulseaudio: requesting buffer attributes: maxlength " << attr.maxlength << ", minreq " << attr.minreq << ", tlength " << attr.tlength << ", prebuf " << attr.prebuf;
+			console::info(s.str().c_str());
 
 			g_pa_threaded_mainloop_lock(mainloop);
 
@@ -876,6 +880,9 @@ namespace {
 				}
 				else
 				{
+					std::stringstream s;
+					s << "Pulseaudio: got buffer attributes: maxlength " << received_attr->maxlength << ", minreq " << received_attr->minreq << ", tlength " << received_attr->tlength << ", prebuf " << received_attr->prebuf;
+					console::info(s.str().c_str());
 					rewind_buffer.reset(received_attr->maxlength);
 				}
 			}
