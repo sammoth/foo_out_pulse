@@ -52,6 +52,7 @@ namespace {
 	static pa_proplist_setp g_pa_proplist_setp;
 	static pa_context_new_with_proplist g_pa_context_new_with_proplist;
 	static pa_context_unref g_pa_context_unref;
+	static pa_context_errno g_pa_context_errno;
 	static pa_context_connect g_pa_context_connect;
 	static pa_context_disconnect g_pa_context_disconnect;
 	static pa_context_get_state g_pa_context_get_state;
@@ -122,7 +123,7 @@ namespace {
 		size_t read_back(size_t distance)
 		{
 			std::lock_guard<std::mutex> lock(buffer_mutex_);
-			size_t to_read = min(distance, lookback_);
+			size_t to_read = pfc::min_t(distance, lookback_);
 			if (head_ < to_read)
 			{
 				memcpy(out_buf_.get(), buf_.get() + max_size_ - (to_read - head_), to_read - head_);
@@ -177,8 +178,8 @@ namespace {
 
 		output_pulse(const GUID& p_device, double p_buffer_length, bool p_dither, t_uint32 p_bitdepth)
 			: buffer_length(p_buffer_length), m_incoming_ptr(0), progressing(false), draining(false), drained(false),
-			cfg_seek_fade_out(min(cfg_pulseaudio_seek_fade_out.get(), 1000 * p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
-			cfg_track_fade_out(min(cfg_pulseaudio_track_fade_out.get(), 1000 * p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
+			cfg_seek_fade_out(pfc::min_t((double)cfg_pulseaudio_seek_fade_out.get(), 1000 * p_buffer_length)), cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
+			cfg_track_fade_out(pfc::min_t((double)cfg_pulseaudio_track_fade_out.get(), 1000 * p_buffer_length)), cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
 			fade_in_next_ms(0), active_fade_in(), rewind_buffer(), rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 || cfg_pulseaudio_track_fade_out.get() > 0),
 			next_write_relative(false), volume(0)
 		{
@@ -193,7 +194,7 @@ namespace {
 			{
 				g_pa_threaded_mainloop_free(mainloop);
 				mainloop = NULL;
-				console::error("Pulseaudio: failed to start playback thread");
+				console_error("failed to start playback thread", 0);
 				stop();
 				return;
 			}
@@ -210,8 +211,7 @@ namespace {
 
 			g_pa_context_set_state_callback(context, context_state_cb, this);
 			const char* server = is_using_winelib ? NULL : "127.0.0.1";
-			if (g_pa_context_connect(context, server, (pa_context_flags_t)0, NULL) < 0
-				|| context_wait(context, mainloop))
+			if (g_pa_context_connect(context, server, (pa_context_flags_t)0, NULL) < 0 || context_wait(context, mainloop))
 			{
 				g_pa_context_unref(context);
 				context = NULL;
@@ -220,7 +220,6 @@ namespace {
 				g_pa_threaded_mainloop_free(mainloop);
 				mainloop = NULL;
 
-				console::error("Pulseaudio: failed to connect");
 				stop();
 				return;
 			}
@@ -242,7 +241,10 @@ namespace {
 				g_pa_context_unref(context);
 
 			if (mainloop != NULL)
+			{
+				g_pa_threaded_mainloop_stop(mainloop);
 				g_pa_threaded_mainloop_free(mainloop);
+			}
 		}
 
 		void pause(bool p_state)
@@ -404,7 +406,7 @@ namespace {
 
 			if (active_fade_in.active)
 			{
-				size_t fade_samples = min(m_incoming.get_size() / m_incoming_spec.m_channels, (active_fade_in.total_samples - active_fade_in.progress));
+				size_t fade_samples = pfc::min_t(m_incoming.get_size() / m_incoming_spec.m_channels, (active_fade_in.total_samples - active_fade_in.progress));
 				fade_section(m_incoming.get_ptr(), fade_samples, active_fade_in.total_samples, active_fade_in.progress, m_incoming_spec.m_channels, true);
 				active_fade_in.progress += fade_samples;
 				if (active_fade_in.progress == active_fade_in.total_samples)
@@ -541,11 +543,11 @@ namespace {
 		static void context_state_cb(pa_context* ctx, void* userdata)
 		{
 			output_pulse* output = (output_pulse*)userdata;
-
+			std::stringstream s;
 			switch (g_pa_context_get_state(ctx))
 			{
 			case PA_CONTEXT_FAILED:
-				console::error("Pulseaudio: connection failed");
+				console_error("connection failed", g_pa_context_errno(ctx));
 				stop();
 			case PA_CONTEXT_READY:
 			case PA_CONTEXT_TERMINATED:
@@ -608,37 +610,84 @@ namespace {
 			}
 
 			g_pa_threaded_mainloop_lock(mainloop);
-			size_t cw_samples = g_pa_stream_writable_size(stream) / sizeof(audio_sample);
-			size_t delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw_samples);
-
-			if (delta > 0)
+			if (next_write_relative)
 			{
-				pa_seek_mode seek_mode = PA_SEEK_RELATIVE;
-				int64_t write_index = 0;
 
-				if (next_write_relative)
+				const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
+				if (info == NULL)
 				{
-					next_write_relative = false;
-					seek_mode = PA_SEEK_ABSOLUTE;
-					const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
-					write_index = info->read_index - (info->read_index % (4 * m_active_spec.m_channels));
-				}
-
-				if (g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, write_index, seek_mode) < 0)
-				{
-					console::error("Pulseaudio: error writing to stream");
+					console_error("error writing to stream - no timing info", 0);
+					g_pa_threaded_mainloop_unlock(mainloop);
 					return 0;
 				}
-				else
-				{
-					if (rewind_active)
-						rewind_buffer.queue(m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample));
 
-					m_incoming_ptr += delta;
+				int64_t write_index = info->read_index - (info->read_index % (4 * m_active_spec.m_channels));
+
+				const pa_buffer_attr* buffer_attr = g_pa_stream_get_buffer_attr(stream);
+				if (buffer_attr == NULL)
+				{
+					console_error("error writing to stream - no buffer attributes", 0);
+					g_pa_threaded_mainloop_unlock(mainloop);
+					return 0;
 				}
+
+				size_t cw_samples = buffer_attr->tlength / sizeof(audio_sample);
+				size_t delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw_samples);
+				if (delta > 0)
+				{
+					int error = g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, write_index, PA_SEEK_ABSOLUTE);
+					if (error < 0)
+					{
+						console_error("error writing to stream", error);
+						g_pa_threaded_mainloop_unlock(mainloop);
+						return (cw_samples - delta) / m_incoming_spec.m_channels;
+					}
+					else
+					{
+						next_write_relative = false;
+
+						if (rewind_active)
+							rewind_buffer.queue(m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample));
+
+						m_incoming_ptr += delta;
+					}
+				}
+
+				g_pa_threaded_mainloop_unlock(mainloop);
+				return (cw_samples - delta) / m_incoming_spec.m_channels;
 			}
-			g_pa_threaded_mainloop_unlock(mainloop);
-			return (cw_samples - delta) / m_incoming_spec.m_channels;
+			else
+			{
+				size_t cw_samples = g_pa_stream_writable_size(stream) / sizeof(audio_sample);
+				if (cw_samples == (size_t)-1)
+				{
+					console_error("g_pa_stream_writable_size error", g_pa_context_errno(context));
+					return 0;
+				}
+
+				size_t delta = pfc::min_t(m_incoming.get_size() - m_incoming_ptr, cw_samples);
+
+				if (delta > 0)
+				{
+					int error = g_pa_stream_write(stream, m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample), NULL, 0, PA_SEEK_RELATIVE);
+					if (error < 0)
+					{
+						console_error("error writing to stream", error);
+						g_pa_threaded_mainloop_unlock(mainloop);
+						return 0;
+					}
+					else
+					{
+						if (rewind_active)
+							rewind_buffer.queue(m_incoming.get_ptr() + m_incoming_ptr, delta * sizeof(audio_sample));
+
+						m_incoming_ptr += delta;
+					}
+				}
+
+				g_pa_threaded_mainloop_unlock(mainloop);
+				return (cw_samples - delta) / m_incoming_spec.m_channels;
+			}
 		}
 
 		void fade_section(audio_sample* data, size_t num_samples_to_write, size_t total_fade_samples, size_t start_at_sample, size_t num_channels, bool fade_in)
@@ -664,6 +713,7 @@ namespace {
 			if (stream == NULL || fade_ms == 0 || !rewind_active)
 			{
 				next_write_relative = true;
+				trigger_update.set_state(true);
 				return;
 			}
 
@@ -685,26 +735,41 @@ namespace {
 			wait_for_op(op);
 
 			const pa_timing_info* timing_info = g_pa_stream_get_timing_info(stream);
+			if (timing_info == NULL)
+			{
+				console_error("error writing to stream - no timing info", 0);
+				g_pa_threaded_mainloop_unlock(mainloop);
+				return;
+			}
+
 			const pa_buffer_attr* buffer_attr = g_pa_stream_get_buffer_attr(stream);
+			if (buffer_attr == NULL)
+			{
+				console_error("error writing to stream - no buffer attributes", 0);
+				g_pa_threaded_mainloop_unlock(mainloop);
+				return;
+			}
+
 			int64_t read_index = timing_info->read_index;
 			int64_t write_index = timing_info->write_index;
 
-			int64_t offset_bytes = m_active_spec.time_to_samples(offset) * m_active_spec.m_channels * 4;
+			int64_t offset_bytes = (int64_t)m_active_spec.time_to_samples(offset) * m_active_spec.m_channels * 4;
 			int64_t buffered_bytes = (buffer_attr->maxlength + write_index - read_index) % buffer_attr->maxlength;
 
-			int64_t rewind_bytes = max(buffered_bytes - offset_bytes, 0);
+			int64_t rewind_bytes = pfc::max_t(buffered_bytes - offset_bytes, (int64_t)0);
 			rewind_bytes = rewind_buffer.read_back(rewind_bytes);
 
 			if (rewind_bytes > 0)
 			{
 				std::shared_ptr<BYTE> rewind_data = rewind_buffer.out_buf_;
-				int64_t fade_samples = min(rewind_bytes / 4 / m_active_spec.m_channels, m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
+				int64_t fade_samples = pfc::min_t(rewind_bytes / 4 / m_active_spec.m_channels, (int64_t)m_active_spec.time_to_samples(0.001 * fade_ms) * m_active_spec.m_channels);
 				fade_section((audio_sample*)rewind_data.get(), fade_samples, fade_samples, 0, m_active_spec.m_channels, false);
 
 				int64_t write_bytes = fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
-				if (g_pa_stream_write(stream, (audio_sample*)rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE) < 0)
+				int error = g_pa_stream_write(stream, (audio_sample*)rewind_data.get(), write_bytes, NULL, read_index + offset_bytes, PA_SEEK_ABSOLUTE);
+				if (error < 0)
 				{
-					console::error("Pulseaudio: error writing to stream");
+					console_error("error writing fade to stream", error);
 				}
 				else
 				{
@@ -768,12 +833,9 @@ namespace {
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length + offset) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
-			attr.minreq = (uint32_t)-1;
+			attr.minreq = attr.maxlength;
 			attr.tlength = attr.maxlength;
-			attr.prebuf = min(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
-
-			if (rewind_active)
-				rewind_buffer.reset(attr.maxlength);
+			attr.prebuf = pfc::min_t(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
 
 			g_pa_threaded_mainloop_lock(mainloop);
 
@@ -783,7 +845,7 @@ namespace {
 			progressing = false;
 			if (stream == NULL) {
 				g_pa_threaded_mainloop_unlock(mainloop);
-				console::error("Pulseaudio: failed to create stream");
+				console_error("failed to create stream", 0);
 				stop();
 				return;
 			}
@@ -793,20 +855,52 @@ namespace {
 			g_pa_stream_set_underflow_callback(stream, stream_underflow_cb, this);
 			g_pa_stream_set_write_callback(stream, stream_write_cb, this);
 
-			if (g_pa_stream_connect_playback(stream, NULL, &attr,
-				flags, NULL, NULL) < 0 || stream_wait(stream, mainloop))
+			int err = g_pa_stream_connect_playback(stream, NULL, &attr, flags, NULL, NULL);
+			if (err < 0 || stream_wait(stream, mainloop))
 			{
 				g_pa_threaded_mainloop_unlock(mainloop);
-				console::error("Pulseaudio: failed to connect stream");
+				console_error("failed to connect stream", err);
 				stop();
 				return;
 			}
 
 			m_active_spec = m_incoming_spec;
 
+			if (rewind_active)
+			{
+				const pa_buffer_attr* received_attr = g_pa_stream_get_buffer_attr(stream);
+				if (received_attr == NULL)
+				{
+					console_error("failed to get server buffer attributes", 0);
+					rewind_buffer.reset(attr.maxlength);
+				}
+				else
+				{
+					rewind_buffer.reset(received_attr->maxlength);
+				}
+			}
+
 			g_pa_threaded_mainloop_unlock(mainloop);
 
 			trigger_update.set_state(true);
+		}
+
+		static void console_error(const char* prefix, int error_code)
+		{
+			std::stringstream s;
+			s << "Pulseaudio: ";
+			s << prefix;
+
+			if (error_code != 0)
+			{
+				const char* error = g_pa_strerror(error_code);
+				if (error != NULL)
+				{
+					s << ": " << error;
+				}
+			}
+
+			console::error(s.str().c_str());
 		}
 
 		static void stream_drained_cb(pa_stream* s, int success, void* userdata)
@@ -884,6 +978,7 @@ namespace {
 
 			g_pa_context_new_with_proplist = (pa_context_new_with_proplist)GetProcAddress(libpulse, "pa_context_new_with_proplist");
 			g_pa_context_unref = (pa_context_unref)GetProcAddress(libpulse, "pa_context_unref");
+			g_pa_context_errno = (pa_context_errno)GetProcAddress(libpulse, "pa_context_errno");
 			g_pa_context_connect = (pa_context_connect)GetProcAddress(libpulse, "pa_context_connect");
 			g_pa_context_disconnect = (pa_context_disconnect)GetProcAddress(libpulse, "pa_context_disconnect");
 			g_pa_context_get_state = (pa_context_get_state)GetProcAddress(libpulse, "pa_context_get_state");
@@ -958,6 +1053,7 @@ namespace {
 				g_pa_proplist_setp == NULL ||
 				g_pa_context_new_with_proplist == NULL ||
 				g_pa_context_unref == NULL ||
+				g_pa_context_errno == NULL ||
 				g_pa_context_connect == NULL ||
 				g_pa_context_disconnect == NULL ||
 				g_pa_context_get_state == NULL ||
