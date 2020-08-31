@@ -610,9 +610,9 @@ namespace {
 			}
 
 			g_pa_threaded_mainloop_lock(mainloop);
+
 			if (next_write_relative)
 			{
-
 				const pa_timing_info* info = g_pa_stream_get_timing_info(stream);
 				if (info == NULL)
 				{
@@ -833,7 +833,7 @@ namespace {
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length + offset) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
-			attr.minreq = pfc::min_t(attr.maxlength, (uint32_t)ceil(m_incoming_spec.time_to_samples(0.1) * m_incoming_spec.m_channels * 4));
+			attr.minreq = attr.maxlength/2;
 			attr.tlength = attr.maxlength;
 			attr.prebuf = pfc::min_t(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
 
