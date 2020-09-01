@@ -457,7 +457,7 @@ namespace {
 	private:
 
 		const double offset = 0.05;
-		const double prebuf = 0.05;
+		const double prebuf = 0.50;
 
 		pa_context* context = NULL;
 		pa_threaded_mainloop* mainloop = NULL;
