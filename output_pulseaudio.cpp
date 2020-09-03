@@ -87,6 +87,9 @@ namespace {
 	{ 0xa1d249b5, 0x8e8c, 0x422b, { 0xbb, 0x61, 0x31, 0x43, 0x5d, 0x59, 0x10, 0x23 } };
 	static const GUID guid_cfg_pulseaudio_fade_in_track =
 	{ 0x6fb3670, 0x4e7d, 0x4601, { 0x83, 0xa6, 0xed, 0x44, 0x3e, 0xb1, 0xe1, 0x7 } };
+	static const GUID guid_cfg_pulseaudio_minreq_workaround = 
+	{ 0xe176bd02, 0xcbc, 0x4fbd, { 0x8f, 0x1a, 0xf2, 0x3a, 0x2a, 0xb7, 0x8, 0x86 } };
+
 
 
 	static advconfig_branch_factory g_pulseaudio_output_branch("Pulseaudio output", guid_cfg_pulseaudio_branch, advconfig_branch::guid_branch_playback, 0);
@@ -94,6 +97,7 @@ namespace {
 	static advconfig_integer_factory cfg_pulseaudio_seek_fade_in("Fade in on seek (milliseconds)", guid_cfg_pulseaudio_fade_in_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_track_fade_out("Fade out on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_track_fade_in("Fade in on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_in_track, guid_cfg_pulseaudio_branch, 0, 0, 0, 1000, 0);
+	static advconfig_checkbox_factory cfg_pulseaudio_minreq_workaround("Enable workaround for driver issue", guid_cfg_pulseaudio_minreq_workaround, guid_cfg_pulseaudio_branch, 0, false);
 
 
 	class lookback_buffer {
@@ -833,7 +837,7 @@ namespace {
 			struct pa_buffer_attr attr;
 			attr.maxlength = ceil(m_incoming_spec.time_to_samples(buffer_length + offset) * m_incoming_spec.m_channels * 4);
 			attr.fragsize = 0;
-			attr.minreq = attr.maxlength/2;
+			attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength/2 : (uint32_t)-1;
 			attr.tlength = attr.maxlength;
 			attr.prebuf = pfc::min_t(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
 
