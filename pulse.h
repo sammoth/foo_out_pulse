@@ -664,3 +664,4 @@ typedef enum pa_subscription_event_type {
 typedef void (*pa_context_subscribe_cb_t)(pa_context *c, pa_subscription_event_type_t t, uint32_t idx, void *userdata);
 typedef pa_operation* (__cdecl *pa_context_subscribe)(pa_context *c, pa_subscription_mask_t m, pa_context_success_cb_t cb, void *userdata);
 typedef void (__cdecl *pa_context_set_subscribe_callback)(pa_context *c, pa_context_subscribe_cb_t cb, void *userdata);
+

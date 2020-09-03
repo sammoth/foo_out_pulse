@@ -380,10 +380,25 @@ namespace {
 				ret += audio_math::samples_to_time((m_incoming.get_size() - m_incoming_ptr) / m_incoming_spec.m_channels, m_incoming_spec.m_sample_rate);
 			}
 			if (m_active_spec.is_valid() && !drained) {
-				pa_usec_t latency;
-				if (stream != NULL && g_pa_stream_get_latency(stream, &latency, NULL) > -1)
+				if (stream != NULL)
 				{
-					ret += (latency * 0.000001);
+					pa_usec_t latency;
+					const pa_timing_info* timing_info = g_pa_stream_get_timing_info(stream);
+					if (g_pa_stream_get_latency(stream, &latency, NULL) > -1)
+					{
+						ret += (latency * 0.000001);
+					}
+					else
+					{
+						g_pa_threaded_mainloop_lock(mainloop);
+						pa_operation* op = g_pa_stream_update_timing_info(stream, stream_success_cb, mainloop);
+						wait_for_op(op);
+						g_pa_threaded_mainloop_unlock(mainloop);
+						if (g_pa_stream_get_latency(stream, &latency, NULL) > -1)
+						{
+							ret += (latency * 0.000001);
+						}
+					}
 				}
 			}
 			return ret;
@@ -461,7 +476,6 @@ namespace {
 	private:
 
 		const double offset = 0.05;
-		const double prebuf = 0.50;
 
 		pa_context* context = NULL;
 		pa_threaded_mainloop* mainloop = NULL;
@@ -839,7 +853,7 @@ namespace {
 			attr.fragsize = 0;
 			attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength/2 : (uint32_t)-1;
 			attr.tlength = attr.maxlength;
-			attr.prebuf = pfc::min_t(attr.tlength, m_incoming_spec.time_to_samples(prebuf) * m_incoming_spec.m_channels * 4);
+			attr.prebuf = (uint32_t)-1;
 
 			std::stringstream s;
 			s << "Pulseaudio: requesting buffer attributes: maxlength " << attr.maxlength << ", minreq " << attr.minreq << ", tlength " << attr.tlength << ", prebuf " << attr.prebuf;
