@@ -6,9 +6,11 @@ This component connects to 127.0.0.1 using Pulse's native TCP protocol.
 First you have to enable the module for this protocol for the Pulse daemon by editing either
 `/etc/pulse/default.pa` or `~/.config/pulse/default.pa` and adding or editing the following line:
 
-`load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1`
+`load-module module-native-protocol-tcp`
 
-NB: Do understand the security implications of this before making this change.
+Next copy or link the Pulseaudio cookie into your Wine prefix, for example:
+
+`ln -s ~/.config/pulse/cookie ~/.wine/drive_c/users/<name>/.config/pulse/cookie`
 
 Make sure the Pulseaudio daemon is actually running, as it cannot be automatically activated over TCP.
 
@@ -29,6 +31,5 @@ Foobar works very well in Wine, but Wine's default Pulseaudio output has some di
 
 ## Todo
 Currently it
-- Doesn't support authentication via cookies,
 - Only connects to localhost and doesn't support connecting via Unix socket like normal programs,
 - Probably doesn't properly pass through channel mappings from source files correctly.
