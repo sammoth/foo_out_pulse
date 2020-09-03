@@ -14,6 +14,9 @@ Make sure the Pulseaudio daemon is actually running, as it cannot be automatical
 
 For the icon to appear in the mixer, you will need to place a png of foobar's icon in, for example, `~/.icons/hicolor/256x256/apps/`
 
+### Known bugs
+- With some sound cards, playback seems to be sped up when Pulseaudio is using its default timer based scheduling mode. You could try switching to interrupt scheduling (tsched=0) or try the workaround in Advanced Preferences.
+
 ## Advantages
 Foobar works very well in Wine, but Wine's default Pulseaudio output has some disadvantages. Compared to using the standard output, this component
 - May be less liable to cause audio dropouts when performing IO-intensive tasks such as tag writing, as it buffers as much as possible on the Pulse end,
