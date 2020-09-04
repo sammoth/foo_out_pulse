@@ -89,6 +89,8 @@ namespace {
 	{ 0x6fb3670, 0x4e7d, 0x4601, { 0x83, 0xa6, 0xed, 0x44, 0x3e, 0xb1, 0xe1, 0x7 } };
 	static const GUID guid_cfg_pulseaudio_minreq_workaround = 
 	{ 0xe176bd02, 0xcbc, 0x4fbd, { 0x8f, 0x1a, 0xf2, 0x3a, 0x2a, 0xb7, 0x8, 0x86 } };
+	static const GUID guid_cfg_pulseaudio_fade_out_stop =
+	{ 0xbf045192, 0xde9b, 0x432d, { 0xa5, 0xd9, 0x36, 0xb1, 0x19, 0x57, 0x6a, 0x61 } };
 
 
 
@@ -97,6 +99,7 @@ namespace {
 	static advconfig_integer_factory cfg_pulseaudio_seek_fade_in("Fade in on seek (milliseconds)", guid_cfg_pulseaudio_fade_in_seek, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_track_fade_out("Fade out on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_integer_factory cfg_pulseaudio_track_fade_in("Fade in on manual track change (milliseconds)", guid_cfg_pulseaudio_fade_in_track, guid_cfg_pulseaudio_branch, 0, 0, 0, 1000, 0);
+	static advconfig_integer_factory cfg_pulseaudio_stop_fade_out("Fade out on stop (milliseconds)", guid_cfg_pulseaudio_fade_out_stop, guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
 	static advconfig_checkbox_factory cfg_pulseaudio_minreq_workaround("Enable workaround for driver issue", guid_cfg_pulseaudio_minreq_workaround, guid_cfg_pulseaudio_branch, 0, false);
 
 
@@ -241,8 +244,20 @@ namespace {
 		}
 		~output_pulse()
 		{
+
+			if (mainloop != NULL)
+			{
+				write_fade_out(cfg_pulseaudio_stop_fade_out);
+				g_pa_threaded_mainloop_lock(mainloop);
+				pa_operation* op = g_pa_stream_drain(stream, stream_success_cb, mainloop);
+				wait_for_op(op);
+				g_pa_threaded_mainloop_unlock(mainloop);
+			}
+
 			if (context != NULL)
+			{
 				g_pa_context_unref(context);
+			}
 
 			if (mainloop != NULL)
 			{
