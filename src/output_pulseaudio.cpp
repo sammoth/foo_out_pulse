@@ -277,11 +277,16 @@ class output_pulse : public output_v4 {
     trigger_update.create(true, true);
   }
   ~output_pulse() {
-    if (context != NULL) {
-      g_pa_context_unref(context);
-    }
-
     if (mainloop != NULL) {
+      g_pa_threaded_mainloop_lock(mainloop);
+      if (context != NULL) {
+        g_pa_context_disconnect(context);
+        g_pa_context_set_event_callback(context, NULL, NULL);
+        g_pa_context_set_state_callback(context, NULL, NULL);
+        g_pa_context_unref(context);
+      }
+      g_pa_threaded_mainloop_unlock(mainloop);
+
       g_pa_threaded_mainloop_stop(mainloop);
       Sleep(100);  // _stop() doesn't seem to block until it's actually safe to
                    // free the mainloop?
@@ -846,9 +851,9 @@ class output_pulse : public output_v4 {
     attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength / 2
                                                          : (uint32_t)-1;
     attr.tlength = attr.maxlength;
-    attr.prebuf =
-        (uint32_t)ceil(m_incoming_spec.time_to_samples(0.001 * cfg_pulseaudio_prebuf) *
-                       m_incoming_spec.m_channels * 4);
+    attr.prebuf = (uint32_t)ceil(
+        m_incoming_spec.time_to_samples(0.001 * cfg_pulseaudio_prebuf) *
+        m_incoming_spec.m_channels * 4);
 
     std::stringstream s;
     s << "Pulseaudio: requesting buffer attributes: maxlength "
