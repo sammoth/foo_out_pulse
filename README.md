@@ -14,7 +14,7 @@ Next copy or link the Pulseaudio cookie into your Wine prefix, for example:
 
 Make sure the Pulseaudio daemon is actually running, as it cannot be automatically activated over TCP.
 
-For the icon to appear in the mixer, you will need to place a png of foobar's icon in, for example, `~/.icons/hicolor/256x256/apps/`
+For the icon to appear in the mixer, you will need to place a png of foobar's icon named `foobar` in, for example, `~/.icons/hicolor/256x256/apps/foobar.png`
 
 ### Known bugs
 - With some sound cards, playback seems to be sped up when Pulseaudio is using its default timer based scheduling mode. You could try switching to interrupt scheduling (tsched=0) or try enabling the workaround in Advanced Preferences.
