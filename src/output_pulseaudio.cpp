@@ -7,8 +7,8 @@
 #include <mutex>
 #include <sstream>
 
-#include "SDK/core_api.h"
-#include "SDK/output.h"
+#include "foobar2000-sdk/foobar2000/SDK/core_api.h"
+#include "foobar2000-sdk/foobar2000/SDK/output.h"
 #include "pulse.h"
 
 namespace {
@@ -207,18 +207,17 @@ class output_pulse : public output_v4 {
         progressing(false),
         draining(false),
         drained(false),
-        cfg_seek_fade_out(pfc::min_t((double)cfg_pulseaudio_seek_fade_out.get(),
-                                     1000 * p_buffer_length)),
-        cfg_seek_fade_in(cfg_pulseaudio_seek_fade_in.get()),
-        cfg_track_fade_out(
-            pfc::min_t((double)cfg_pulseaudio_track_fade_out.get(),
-                       1000 * p_buffer_length)),
-        cfg_track_fade_in(cfg_pulseaudio_track_fade_in.get()),
+        cfg_seek_fade_out(pfc::min_t((size_t)cfg_pulseaudio_seek_fade_out,
+                                     (size_t)(1000 * p_buffer_length))),
+        cfg_seek_fade_in((size_t)cfg_pulseaudio_seek_fade_in),
+        cfg_track_fade_out(pfc::min_t((size_t)cfg_pulseaudio_track_fade_out,
+                                      (size_t)(1000 * p_buffer_length))),
+        cfg_track_fade_in((size_t)cfg_pulseaudio_track_fade_in),
         fade_in_next_ms(0),
         active_fade_in(),
         rewind_buffer(),
-        rewind_active(cfg_pulseaudio_seek_fade_out.get() > 0 ||
-                      cfg_pulseaudio_track_fade_out.get() > 0),
+        rewind_active(cfg_pulseaudio_seek_fade_out > 0 ||
+                      cfg_pulseaudio_track_fade_out > 0),
         next_write_relative(false),
         volume(0) {
     if (!load_pulse_dll()) {
@@ -274,7 +273,7 @@ class output_pulse : public output_v4 {
   }
   ~output_pulse() {
     if (mainloop != NULL) {
-      write_fade_out(cfg_pulseaudio_stop_fade_out);
+      write_fade_out((size_t)cfg_pulseaudio_stop_fade_out);
       g_pa_threaded_mainloop_lock(mainloop);
       pa_operation* op = g_pa_stream_drain(stream, stream_success_cb, mainloop);
       wait_for_op(op);
@@ -526,7 +525,7 @@ class output_pulse : public output_v4 {
     pa_context_state_t state;
     while ((state = g_pa_context_get_state(ctx)) != PA_CONTEXT_READY) {
       if (state == PA_CONTEXT_FAILED || state == PA_CONTEXT_TERMINATED)
-        return -1;
+        return false;
       g_pa_threaded_mainloop_wait(ml);
     }
     return 0;
@@ -554,7 +553,7 @@ class output_pulse : public output_v4 {
 
     if (g_pa_cvolume_valid(&i->volume) &&
         output->volume != i->volume.values[0]) {
-      float volume_db = g_pa_sw_volume_to_dB(i->volume.values[0]);
+      float volume_db = (float)g_pa_sw_volume_to_dB(i->volume.values[0]);
       fb2k::inMainThread(
           [volume_db]() { playback_control::get()->set_volume(volume_db); });
     }
@@ -705,13 +704,13 @@ class output_pulse : public output_v4 {
                     size_t total_fade_samples, size_t start_at_sample,
                     size_t num_channels, bool fade_in) {
     if (fade_in) {
-      for (int s = 0; s < num_samples_to_write; s++) {
+      for (size_t s = 0; s < num_samples_to_write; s++) {
         audio_math::scale(
             data + (s * num_channels), num_channels, data + (s * num_channels),
             (1.0f * (s + start_at_sample)) / (1.0f * total_fade_samples));
       }
     } else {
-      for (int s = 0; s < num_samples_to_write; s++) {
+      for (size_t s = 0; s < num_samples_to_write; s++) {
         audio_math::scale(
             data + (s * num_channels), num_channels, data + (s * num_channels),
             (1.0f * (total_fade_samples - (start_at_sample + s))) /
@@ -768,7 +767,7 @@ class output_pulse : public output_v4 {
 
     int64_t rewind_bytes =
         pfc::max_t(buffered_bytes - offset_bytes, (int64_t)0);
-    rewind_bytes = rewind_buffer.read_back(rewind_bytes);
+    rewind_bytes = rewind_buffer.read_back((size_t)rewind_bytes);
 
     if (rewind_bytes > 0) {
       std::shared_ptr<BYTE> rewind_data = rewind_buffer.out_buf_;
@@ -776,18 +775,18 @@ class output_pulse : public output_v4 {
           pfc::min_t(rewind_bytes / 4 / m_active_spec.m_channels,
                      (int64_t)m_active_spec.time_to_samples(0.001 * fade_ms) *
                          m_active_spec.m_channels);
-      fade_section((audio_sample*)rewind_data.get(), fade_samples, fade_samples,
+      fade_section((audio_sample*)rewind_data.get(), (size_t)fade_samples, (size_t)fade_samples,
                    0, m_active_spec.m_channels, false);
 
       int64_t write_bytes =
           fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
       int error = g_pa_stream_write(
-          stream, (audio_sample*)rewind_data.get(), write_bytes, NULL,
+          stream, (audio_sample*)rewind_data.get(), (size_t)write_bytes, NULL,
           read_index + offset_bytes, PA_SEEK_ABSOLUTE);
       if (error < 0) {
         console_error("error writing fade to stream", error);
       } else {
-        rewind_buffer.queue((audio_sample*)rewind_data.get(), write_bytes);
+        rewind_buffer.queue((audio_sample*)rewind_data.get(), (size_t)write_bytes);
       }
     } else {
       next_write_relative = true;
@@ -838,7 +837,7 @@ class output_pulse : public output_v4 {
 
     struct pa_buffer_attr attr;
     attr.maxlength =
-        ceil(m_incoming_spec.time_to_samples(buffer_length + offset) *
+        (uint32_t)ceil(m_incoming_spec.time_to_samples(buffer_length + offset) *
              m_incoming_spec.m_channels * 4);
     attr.fragsize = 0;
     attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength / 2
