@@ -272,7 +272,7 @@ class output_pulse : public output_v4 {
     trigger_update.create(true, true);
   }
   ~output_pulse() {
-    if (mainloop != NULL) {
+    if (mainloop != NULL && stream != NULL) {
       write_fade_out((size_t)cfg_pulseaudio_stop_fade_out);
       g_pa_threaded_mainloop_lock(mainloop);
       pa_operation* op = g_pa_stream_drain(stream, stream_success_cb, mainloop);
