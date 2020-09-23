@@ -97,10 +97,10 @@ static const GUID guid_cfg_pulseaudio_fade_in_seek = {
     0x481c,
     {0xb2, 0x6a, 0xf7, 0x36, 0x83, 0xec, 0xf6, 0x40}};
 static const GUID guid_cfg_pulseaudio_fade_out_track = {
-    0xa1d249b5,
-    0x8e8c,
-    0x422b,
-    {0xbb, 0x61, 0x31, 0x43, 0x5d, 0x59, 0x10, 0x23}};
+    0xe136e959,
+    0x929b,
+    0x4005,
+    {0xaa, 0x9e, 0x8e, 0x8b, 0x91, 0x5b, 0x5d, 0x2}};
 static const GUID guid_cfg_pulseaudio_fade_in_track = {
     0x6fb3670, 0x4e7d, 0x4601, {0x83, 0xa6, 0xed, 0x44, 0x3e, 0xb1, 0xe1, 0x7}};
 static const GUID guid_cfg_pulseaudio_minreq_workaround = {
@@ -116,13 +116,13 @@ static advconfig_branch_factory g_pulseaudio_output_branch(
     advconfig_branch::guid_branch_playback, 0);
 static advconfig_integer_factory cfg_pulseaudio_seek_fade_out(
     "Fade out on seek (milliseconds)", guid_cfg_pulseaudio_fade_out_seek,
-    guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+    guid_cfg_pulseaudio_branch, 0, 15, 0, 1000, 0);
 static advconfig_integer_factory cfg_pulseaudio_seek_fade_in(
     "Fade in on seek (milliseconds)", guid_cfg_pulseaudio_fade_in_seek,
-    guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+    guid_cfg_pulseaudio_branch, 0, 15, 0, 1000, 0);
 static advconfig_integer_factory cfg_pulseaudio_track_fade_out(
     "Fade out on manual track change (milliseconds)",
-    guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 10, 0,
+    guid_cfg_pulseaudio_fade_out_track, guid_cfg_pulseaudio_branch, 0, 0, 0,
     1000, 0);
 static advconfig_integer_factory cfg_pulseaudio_track_fade_in(
     "Fade in on manual track change (milliseconds)",
@@ -130,7 +130,7 @@ static advconfig_integer_factory cfg_pulseaudio_track_fade_in(
     1000, 0);
 static advconfig_integer_factory cfg_pulseaudio_stop_fade_out(
     "Fade out on stop (milliseconds)", guid_cfg_pulseaudio_fade_out_stop,
-    guid_cfg_pulseaudio_branch, 0, 10, 0, 1000, 0);
+    guid_cfg_pulseaudio_branch, 0, 15, 0, 1000, 0);
 static advconfig_checkbox_factory cfg_pulseaudio_minreq_workaround(
     "Enable workaround for driver issue", guid_cfg_pulseaudio_minreq_workaround,
     guid_cfg_pulseaudio_branch, 0, false);
