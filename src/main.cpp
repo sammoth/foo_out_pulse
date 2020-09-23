@@ -9,6 +9,6 @@ const char* about = "Copyright (c) sammoth, 2020\n"
 "Source code is provided at:\n"
 "https://github.com/sammoth/foo_out_pulse/releases";
 
-DECLARE_COMPONENT_VERSION("Pulseaudio Output", "0.6-beta",
+DECLARE_COMPONENT_VERSION("Pulseaudio Output", "0.6.1-beta",
                           about);
 VALIDATE_COMPONENT_FILENAME("foo_out_pulse.dll");
