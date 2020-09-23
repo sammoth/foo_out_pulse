@@ -213,11 +213,13 @@ class output_pulse : public output_v4 {
         cfg_track_fade_out(pfc::min_t((size_t)cfg_pulseaudio_track_fade_out,
                                       (size_t)(1000 * p_buffer_length))),
         cfg_track_fade_in((size_t)cfg_pulseaudio_track_fade_in),
+        cfg_stop_fade_out((size_t)cfg_pulseaudio_stop_fade_out),
         fade_in_next_ms(0),
         active_fade_in(),
         rewind_buffer(),
         rewind_active(cfg_pulseaudio_seek_fade_out > 0 ||
-                      cfg_pulseaudio_track_fade_out > 0),
+                      cfg_pulseaudio_track_fade_out > 0 ||
+                      cfg_pulseaudio_stop_fade_out > 0),
         next_write_relative(false),
         volume(0) {
     if (!load_pulse_dll()) {
@@ -272,12 +274,8 @@ class output_pulse : public output_v4 {
     trigger_update.create(true, true);
   }
   ~output_pulse() {
-    if (mainloop != NULL && stream != NULL) {
-      write_fade_out((size_t)cfg_pulseaudio_stop_fade_out);
-      g_pa_threaded_mainloop_lock(mainloop);
-      pa_operation* op = g_pa_stream_drain(stream, stream_success_cb, mainloop);
-      wait_for_op(op);
-      g_pa_threaded_mainloop_unlock(mainloop);
+    if (mainloop != NULL && stream != NULL && cfg_stop_fade_out > 0) {
+      write_fade_out((size_t)cfg_stop_fade_out);
     }
 
     if (context != NULL) {
@@ -513,6 +511,7 @@ class output_pulse : public output_v4 {
   const size_t cfg_seek_fade_out;
   const size_t cfg_track_fade_in;
   const size_t cfg_track_fade_out;
+  const size_t cfg_stop_fade_out;
   size_t fade_in_next_ms;
   fade active_fade_in;
   bool next_write_relative;
@@ -775,8 +774,8 @@ class output_pulse : public output_v4 {
           pfc::min_t(rewind_bytes / 4 / m_active_spec.m_channels,
                      (int64_t)m_active_spec.time_to_samples(0.001 * fade_ms) *
                          m_active_spec.m_channels);
-      fade_section((audio_sample*)rewind_data.get(), (size_t)fade_samples, (size_t)fade_samples,
-                   0, m_active_spec.m_channels, false);
+      fade_section((audio_sample*)rewind_data.get(), (size_t)fade_samples,
+                   (size_t)fade_samples, 0, m_active_spec.m_channels, false);
 
       int64_t write_bytes =
           fade_samples * m_active_spec.m_channels * sizeof(audio_sample);
@@ -786,7 +785,11 @@ class output_pulse : public output_v4 {
       if (error < 0) {
         console_error("error writing fade to stream", error);
       } else {
-        rewind_buffer.queue((audio_sample*)rewind_data.get(), (size_t)write_bytes);
+        rewind_buffer.queue((audio_sample*)rewind_data.get(),
+                            (size_t)write_bytes);
+        pa_operation* op =
+            g_pa_stream_drain(stream, stream_success_cb, mainloop);
+        wait_for_op(op);
       }
     } else {
       next_write_relative = true;
@@ -838,7 +841,7 @@ class output_pulse : public output_v4 {
     struct pa_buffer_attr attr;
     attr.maxlength =
         (uint32_t)ceil(m_incoming_spec.time_to_samples(buffer_length + offset) *
-             m_incoming_spec.m_channels * 4);
+                       m_incoming_spec.m_channels * 4);
     attr.fragsize = 0;
     attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength / 2
                                                          : (uint32_t)-1;
