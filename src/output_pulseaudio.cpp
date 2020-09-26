@@ -284,6 +284,7 @@ class output_pulse : public output_v4 {
 
     if (mainloop != NULL) {
       g_pa_threaded_mainloop_stop(mainloop);
+      Sleep(100); // _stop() doesn't seem to block until it's actually safe to free the mainloop?
       g_pa_threaded_mainloop_free(mainloop);
     }
   }
