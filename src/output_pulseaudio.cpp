@@ -110,6 +110,11 @@ static const GUID guid_cfg_pulseaudio_fade_out_stop = {
     0xde9b,
     0x432d,
     {0xa5, 0xd9, 0x36, 0xb1, 0x19, 0x57, 0x6a, 0x61}};
+static const GUID guid_cfg_pulseaudio_prebuffer = {
+    0x64cd1e28,
+    0x87ea,
+    0x41e5,
+    {0xaf, 0x3d, 0xc6, 0xcd, 0x2f, 0x52, 0xac, 0xee}};
 
 static advconfig_branch_factory g_pulseaudio_output_branch(
     "Pulseaudio output", guid_cfg_pulseaudio_branch,
@@ -131,6 +136,9 @@ static advconfig_integer_factory cfg_pulseaudio_track_fade_in(
 static advconfig_checkbox_factory cfg_pulseaudio_minreq_workaround(
     "Enable workaround for driver issue", guid_cfg_pulseaudio_minreq_workaround,
     guid_cfg_pulseaudio_branch, 0, false);
+static advconfig_integer_factory cfg_pulseaudio_prebuf(
+    "Request prebuffer (milliseconds)", guid_cfg_pulseaudio_prebuffer,
+    guid_cfg_pulseaudio_branch, 0, 200, 0, 100000, 0);
 
 class lookback_buffer {
  public:
@@ -275,7 +283,8 @@ class output_pulse : public output_v4 {
 
     if (mainloop != NULL) {
       g_pa_threaded_mainloop_stop(mainloop);
-      Sleep(100); // _stop() doesn't seem to block until it's actually safe to free the mainloop?
+      Sleep(100);  // _stop() doesn't seem to block until it's actually safe to
+                   // free the mainloop?
       g_pa_threaded_mainloop_free(mainloop);
     }
   }
@@ -837,7 +846,9 @@ class output_pulse : public output_v4 {
     attr.minreq = cfg_pulseaudio_minreq_workaround.get() ? attr.maxlength / 2
                                                          : (uint32_t)-1;
     attr.tlength = attr.maxlength;
-    attr.prebuf = (uint32_t)-1;
+    attr.prebuf =
+        (uint32_t)ceil(m_incoming_spec.time_to_samples(0.001 * cfg_pulseaudio_prebuf) *
+                       m_incoming_spec.m_channels * 4);
 
     std::stringstream s;
     s << "Pulseaudio: requesting buffer attributes: maxlength "
