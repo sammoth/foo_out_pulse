@@ -128,9 +128,6 @@ static advconfig_integer_factory cfg_pulseaudio_track_fade_in(
     "Fade in on manual track change (milliseconds)",
     guid_cfg_pulseaudio_fade_in_track, guid_cfg_pulseaudio_branch, 0, 0, 0,
     1000, 0);
-static advconfig_integer_factory cfg_pulseaudio_stop_fade_out(
-    "Fade out on stop (milliseconds)", guid_cfg_pulseaudio_fade_out_stop,
-    guid_cfg_pulseaudio_branch, 0, 15, 0, 1000, 0);
 static advconfig_checkbox_factory cfg_pulseaudio_minreq_workaround(
     "Enable workaround for driver issue", guid_cfg_pulseaudio_minreq_workaround,
     guid_cfg_pulseaudio_branch, 0, false);
@@ -213,13 +210,11 @@ class output_pulse : public output_v4 {
         cfg_track_fade_out(pfc::min_t((size_t)cfg_pulseaudio_track_fade_out,
                                       (size_t)(1000 * p_buffer_length))),
         cfg_track_fade_in((size_t)cfg_pulseaudio_track_fade_in),
-        cfg_stop_fade_out((size_t)cfg_pulseaudio_stop_fade_out),
         fade_in_next_ms(0),
         active_fade_in(),
         rewind_buffer(),
         rewind_active(cfg_pulseaudio_seek_fade_out > 0 ||
-                      cfg_pulseaudio_track_fade_out > 0 ||
-                      cfg_pulseaudio_stop_fade_out > 0),
+                      cfg_pulseaudio_track_fade_out > 0),
         next_write_relative(false),
         volume(0) {
     if (!load_pulse_dll()) {
@@ -274,10 +269,6 @@ class output_pulse : public output_v4 {
     trigger_update.create(true, true);
   }
   ~output_pulse() {
-    if (mainloop != NULL && stream != NULL && cfg_stop_fade_out > 0) {
-      write_fade_out((size_t)cfg_stop_fade_out);
-    }
-
     if (context != NULL) {
       g_pa_context_unref(context);
     }
@@ -512,7 +503,6 @@ class output_pulse : public output_v4 {
   const size_t cfg_seek_fade_out;
   const size_t cfg_track_fade_in;
   const size_t cfg_track_fade_out;
-  const size_t cfg_stop_fade_out;
   size_t fade_in_next_ms;
   fade active_fade_in;
   bool next_write_relative;
