@@ -16,6 +16,8 @@ Make sure the Pulseaudio daemon is actually running, as it cannot be automatical
 
 For the icon to appear in the mixer, you will need to place a png of foobar's icon named `foobar` in, for example, `~/.icons/hicolor/256x256/apps/foobar.png`
 
+Wine 5.14+ is required for Pulseaudio to be able to read the cookie file, due to <a href="https://source.winehq.org/git/wine.git/commitdiff/587732acb7834a52a2af5bb45e59899ab8ec3f5d">this change</a> - <a href="https://hydrogenaud.io/index.php?topic=119763.msg988559#msg988559">see this discussion</a> for context.
+
 ### Known bugs
 - With some sound cards, playback seems to be sped up when Pulseaudio is using its default timer based scheduling mode. You could try switching to interrupt scheduling (tsched=0) or try enabling the workaround in Advanced Preferences.
 
